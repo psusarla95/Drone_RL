@@ -1,0 +1,6 @@
+envs.egg-info/PKG-INFO
+envs.egg-info/SOURCES.txt
+envs.egg-info/dependency_links.txt
+envs.egg-info/requires.txt
+envs.egg-info/top_level.txt
+test/test_main.py
