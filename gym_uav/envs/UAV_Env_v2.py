@@ -87,17 +87,17 @@ class UAV_Env_v2(gym.Env):
         self.Nhops = 5
 
         #UE information
-        self.ue_xloc = np.arange(-500, 500, 100)  #10 locs
-        self.ue_yloc = np.arange(0,500, 100)     #5 locs
-        self.ue_vx = np.array([10, 12, 15]) #3 vel parameters
-        self.ue_vy = np.array([10, 12, 15]) #3 vel parameters
-        self.ue_xdest = np.array([400]) # 1 x-dest loc
-        self.ue_ydest = np.array([400]) # 1 y-dest loc
+        self.ue_xloc = np.arange(-500, 500, 50)  #10 locs
+        self.ue_yloc = np.arange(50,550, 50)     #5 locs
+        self.ue_vx = np.array([-50, 100,50]) #3 vel parameters
+        self.ue_vy = np.array([-50, 100, 50]) #3 vel parameters
+        self.ue_xdest = np.array([450]) # 1 x-dest loc
+        self.ue_ydest = np.array([450]) # 1 y-dest loc
 
 
         self.seed()
         #low_obs = np.array([-500, 0, 0.0, 10.0, 10.0])
-        self.high_obs = np.array([400, 400, 15, 15, np.pi, 400, 400])
+        self.high_obs = np.array([np.max(self.ue_xloc), np.max(self.ue_yloc), np.max(self.ue_vx), np.max(self.ue_vy), np.pi, np.max(self.ue_xdest), np.max(self.ue_ydest)])
         self.obs_space = spaces.MultiDiscrete([len(self.ue_xloc), #ue_xloc
                                                len(self.ue_yloc), #ue_yloc
                                                len(self.ue_vx), #ue_vx
@@ -116,7 +116,7 @@ class UAV_Env_v2(gym.Env):
     def step(self, action):
         assert self.act_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
-        state = self.state * self.high_obs
+        state = np.rint(self.state[0] * self.high_obs)
         ue_xloc, ue_yloc, ue_vx, ue_vy, rbd, ue_xdest, ue_ydest = state
         rbs = self.BeamSet[action]
 
@@ -125,17 +125,26 @@ class UAV_Env_v2(gym.Env):
         new_ue_pos = np.array([new_ue_xloc, new_ue_yloc, 0])
 
         self.state = np.array([new_ue_xloc, new_ue_yloc, ue_vx, ue_vy, rbs, ue_xdest, ue_ydest]) / self.high_obs
+        self.state = self.state.reshape((1, len(self.state)))
 
         self.mimo_model = MIMO(new_ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
         prev_rate = self.rate
-        prev_dist = np.sqrt(new_ue_xloc**2 + new_ue_yloc**2) #x**2 + y**2
+        prev_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
         self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))#rkbeam_vec, tbeam_vec )
 
         self.steps_done += 1
 
-        rwd = self._reward()
+        #rwd = self._reward(prev_dist)
         #print("[uav_env] rwd: {}".format(rwd))
-        done = self._gameover()
+        rwd, done = self._gameover(prev_dist)
+
+        #if status == 1: #game over
+        #    done = True
+        #elif (status == -1) or (status == -2): #uav crossing boundaries
+        #    rwd = -2.0
+        #    done = True
+        #else:
+        #    done = False
 
         return self.state, rwd, done, {}
 
@@ -153,6 +162,7 @@ class UAV_Env_v2(gym.Env):
                                self.ue_xdest[xdest_ndx],
                                self.ue_ydest[ydest_ndx]])
 
+
         self.steps_done = 0
         self.rate = 0
 
@@ -168,12 +178,13 @@ class UAV_Env_v2(gym.Env):
         self.rate_threshold = np.max(dest_rates)
 
         self.state = self.state / self.high_obs
-        return np.array(self.state)
+        self.state = self.state.reshape((1, len(self.state)))
+        return self.state
 
     def render(self, mode='human', close=False):
         pass
 
-    def _reward(self):
+    def _reward(self, prev_dist):
 
         #bf_condn = False
         #if ((prev_rate >= self.rate) and (prev_dist <= cur_dist)) or ((prev_rate <= self.rate) and (prev_dist >= cur_dist)):
@@ -185,19 +196,50 @@ class UAV_Env_v2(gym.Env):
         #else:
         #    return -3
 
-        if self.rate >= self.rate_threshold:
+        ue_dist = np.sqrt((self.state[0][0]-self.state[0][-2]) ** 2 + (self.state[0][1]--self.state[0][-1]) ** 2)
+        #ue_dest_dist = np.sqrt(self.state[0][-2]**2 + self.state[0][-1]**2)
+
+        if (self.rate >= self.rate_threshold) and (ue_dist <= prev_dist):
             return 10*self.rate + 3
         else:
-            return 10*self.rate - 3
+            return 0.0#10*self.rate - 3
 
-    def _gameover(self):
-        ue_dist = np.sqrt(self.state[0]**2 + self.state[1]**2)
-        ue_dest_dist = np.sqrt(self.state[-2]**2 + self.state[-1]**2)
-        return ue_dist == ue_dest_dist
+    def _gameover(self, prev_dist):
+        #ue_dist = np.sqrt(self.state[0][0]**2 + self.state[0][1]**2)
+        #ue_dest_dist = np.sqrt(self.state[0][-2]**2 + self.state[0][-1]**2)
+        #return ue_dist >= ue_dest_dist
+        state = np.rint(self.state[0] * self.high_obs)
+        ue_dist = np.sqrt((state[0] - state[-2]) ** 2 + (state[1] - -state[-1]) ** 2)
+
+
+        if (self.rate >= self.rate_threshold) and (ue_dist == 0):
+            rwd = 15.0
+            done = True
+        elif (self.rate >= self.rate_threshold) and (ue_dist <= prev_dist):
+            rwd = 500*self.rate + 3
+            done = False
+        elif (state[0] < np.min(self.ue_xloc)) or (state[0] > np.max(self.ue_xloc)):
+            rwd = -2.0
+            done = False
+        elif (state[1] < np.min(self.ue_yloc)) or (state[1] > np.max(self.ue_yloc)):
+            rwd = -2.0
+            done = False
+        else:
+            rwd = 0.0
+            done = False
+        #if (state[0] == state[-2] ) and (state[1] == state[-1]):
+        #    return 1#True
+        #elif (state[0] < np.min(self.ue_xloc)) or (state[0] > np.max(self.ue_xloc)):
+        #    return -1#True
+        #elif (state[1] < np.min(self.ue_yloc)) or (state[1] > np.max(self.ue_yloc)):
+        #    return -2#True
+        #else:
+        #    return 0#False
+        return rwd, done
 
     def get_Los_Rate(self, state):
 
-        state = (state * self.high_obs)
+        state = np.rint(state[0] * self.high_obs)
         ue_xloc, ue_yloc, _, _, _, _, _ = state
 
         sc_xyz = np.array([])
@@ -210,9 +252,9 @@ class UAV_Env_v2(gym.Env):
         return SNR, rate
 
     def get_Exh_Rate(self, state):
-        state = (state * self.high_obs)
+        state = np.rint(state[0] * self.high_obs)
         ue_xloc, ue_yloc, _, _, _, _, _ = state
-        ue_pos = np.array([ue_xloc, ue_yloc])
+        ue_pos = np.array([ue_xloc, ue_yloc,0])
 
         mimo_exh_model = MIMO(ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
         #rbeam_vec = self.BeamSet#Generate_BeamDir(self.N)
