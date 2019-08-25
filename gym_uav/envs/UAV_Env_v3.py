@@ -29,7 +29,7 @@ Model Characteristics:
 '''
 
 
-class UAV_Env_v2(gym.Env):
+class UAV_Env_v3(gym.Env):
     """
     Description:
     A UAV moves in a region around the base station. The problem is to provide the UAV with best possible QoS over N steps
@@ -87,27 +87,27 @@ class UAV_Env_v2(gym.Env):
         self.Nhops = 5
 
         #UE information
-        self.ue_step = 50
-        self.ue_xloc = np.arange(-500, 550, 50)  #10 locs
-        #self.ue_xloc = np.delete(self.ue_xloc, np.argwhere(self.ue_xloc == 0)) #remove (0,0) from ue_xloc
+        self.ue_xloc = np.arange(-500, 500, 50)  #10 locs
         self.ue_yloc = np.arange(50,550, 50)     #5 locs
-        #self.ue_yloc = np.delete(self.ue_yloc, np.argwhere(self.ue_yloc == 0))  # remove (0,0) from ue_xloc
-        self.ue_vx = np.array([50,100]) #3 speed parameters
-        self.ue_vy = np.array([50,100]) #3 speed parameters
-        self.ue_xdest = np.array([np.min(self.ue_xloc)]) # 1 x-dest loc np.min(self.ue_xloc)
-        self.ue_ydest = np.array([np.min(self.ue_yloc)]) # 1 y-dest loc
-        self.ue_xsrc = np.array([np.max(self.ue_xloc)]) # 1 source x-loc
-        self.ue_ysrc = np.array([np.max(self.ue_yloc)]) # 1 source y-loc
-        self.ue_moves = np.array(['L', 'R', 'U', 'D'])  # moving direction of UAV
+        self.ue_vx = np.array([50, 100, 150]) #3 speed values
+        self.ue_vy = np.array([50, 100, 150]) #3 speed values
+        self.ue_xdest = np.array([450]) # 1 x-dest loc
+        self.ue_ydest = np.array([450]) # 1 y-dest loc
+        self.ue_xsrc = np.array([np.min(self.ue_xloc)]) # 1 source x-loc
+        self.ue_ysrc = np.array([np.min(self.ue_yloc)]) # 1 source y-loc
+        self.ue_moves = np.array(['L', 'R', 'U', 'D', 'N']) #moving direction of UAV
+        self.ue_curr_vel = None
 
         self.seed()
         #low_obs = np.array([-500, 0, 0.0, 10.0, 10.0])
-        self.high_obs = np.array([np.max(self.ue_xloc), np.max(self.ue_yloc)])
-        self.obs_space = spaces.MultiDiscrete([len(self.ue_xloc), #ue_xloc
-                                               len(self.ue_yloc), #ue_yloc
-                                             ])
+        self.high_obs = np.array([np.max(self.ue_xloc), np.max(self.ue_yloc), np.max(self.ue_vx), np.max(self.ue_vy)])
+        self.obs_space = spaces.MultiDiscrete([len(self.ue_xloc),  #ue_xloc
+                                               len(self.ue_yloc),  #ue_yloc
+                                               len(self.ue_vx),  # ue_xspeed
+                                               len(self.ue_vy)  # ue_yspeed
+                                               ])
 
-        self.act_space = spaces.Discrete(self.N*len(self.ue_moves)) #n(RBD)*n(ue_xvel)*n(ue_yvel)
+        self.act_space = spaces.Discrete(self.N*len(self.ue_moves)) #n(RBD)*n(ue_moves)
 
 
     def seed(self, seed=None):
@@ -120,27 +120,16 @@ class UAV_Env_v2(gym.Env):
         state = np.rint(self.state * self.high_obs)
 
         rbd_ndx, ue_mv_ndx = self.decode_action(action)
-        ue_vx, ue_vy = self.choose_vel(ue_mv_ndx)
+        ue_vx = self.ue_vx[0]
+        ue_vy = self.ue_vy[0]
         rbs = self.BeamSet[rbd_ndx]
         ue_xdest = self.ue_xdest[0]
         ue_ydest = self.ue_ydest[0]
 
         ue_xloc, ue_yloc = state
 
-        ue_mv = self.ue_moves[ue_mv_ndx]
-        if ue_mv == 'L':
-            new_ue_xloc = max(ue_xloc + ue_vx, np.min(self.ue_xloc))
-            new_ue_yloc = ue_yloc + ue_vy
-        if ue_mv == 'U':
-            new_ue_xloc = ue_xloc + ue_vx
-            new_ue_yloc = min(ue_yloc + ue_vy, np.max(self.ue_yloc))
-        if ue_mv == 'R':
-            new_ue_xloc = min(ue_xloc + ue_vx, np.max(self.ue_xloc))
-            new_ue_yloc = ue_yloc + ue_vy
-        if ue_mv == 'D':
-            new_ue_xloc = ue_xloc + ue_vx
-            new_ue_yloc = max(ue_yloc + ue_vy, np.min(self.ue_yloc))
-
+        new_ue_xloc = ue_xloc + ue_vx
+        new_ue_yloc = ue_yloc + ue_vy
         new_ue_pos = np.array([new_ue_xloc, new_ue_yloc, 0])
 
         self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
@@ -151,13 +140,12 @@ class UAV_Env_v2(gym.Env):
         prev_rate = self.rate
         prev_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
         self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))#rkbeam_vec, tbeam_vec )
-        #self.rate = 1e3*self.rate
 
         self.steps_done += 1
 
         #rwd = self._reward(prev_dist)
         #print("[uav_env] rwd: {}".format(rwd))
-        rwd, done = self._gameover(prev_dist, prev_rate)
+        rwd, done = self._gameover(prev_dist)
 
         #if status == 1: #game over
         #    done = True
@@ -173,24 +161,23 @@ class UAV_Env_v2(gym.Env):
         # Note: should be a uniform random value between starting 4-5 SNR states
         #self.TB_r = get_TBD(ue, self.alpha)#Gen_RandomBeams(1, self.N)[0]  # one random TX beam
         #state_indices = self.obs_space.sample()
-        xloc_ndx, yloc_ndx = self.obs_space.sample()
+        #xloc_ndx, yloc_ndx = state_indices
 
-
-
-
+        ue_curr_vel = (np.random.choice(self.ue_vx), np.random.choice(self.ue_vy))
         #Start from a fixed start location
-        self.state = np.array([self.ue_xloc[xloc_ndx],
-                               self.ue_yloc[yloc_ndx]
+        self.state = np.array([self.ue_xsrc[0],
+                               self.ue_ysrc[0],
+                               ue_curr_vel[0],
+                               ue_curr_vel[1]
                                ])
-        #self.state = np.array([self.ue_xsrc[0],
-        #                       self.ue_ysrc[0]
-        #                       ])
+
 
         self.steps_done = 0
-        self.rate = 0.0
+        self.rate = 0
+
 
         #Computing the rate threshold for the given destination
-        ue_dest = np.array([self.ue_xloc[xloc_ndx], self.ue_yloc[yloc_ndx], 0])
+        ue_dest = np.array([self.ue_xdest[0], self.ue_ydest[0], 0])
         dest_mimo_model = MIMO(ue_dest, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
         dest_SNR = []
         dest_rates = []
@@ -207,7 +194,6 @@ class UAV_Env_v2(gym.Env):
     def render(self, mode='human', close=False):
         pass
 
-    #Not using this function
     def _reward(self, prev_dist):
 
         #bf_condn = False
@@ -220,7 +206,7 @@ class UAV_Env_v2(gym.Env):
         #else:
         #    return -3
 
-        ue_dist = np.sqrt((self.state[0]-self.ue_xdest) ** 2 + (self.state[1]-self.ue_ydest) ** 2)
+        ue_dist = np.sqrt((self.state[0]-self.ue_xdest) ** 2 + (self.state[1]--self.ue_ydest) ** 2)
         #ue_dest_dist = np.sqrt(self.state[0][-2]**2 + self.state[0][-1]**2)
 
         if (self.rate >= self.rate_threshold) and (ue_dist <= prev_dist):
@@ -228,41 +214,28 @@ class UAV_Env_v2(gym.Env):
         else:
             return 0.0#10*self.rate - 3
 
-    def _gameover(self, prev_dist, prev_rate):
+    def _gameover(self, prev_dist):
         #ue_dist = np.sqrt(self.state[0][0]**2 + self.state[0][1]**2)
         #ue_dest_dist = np.sqrt(self.state[0][-2]**2 + self.state[0][-1]**2)
         #return ue_dist >= ue_dest_dist
         state = np.rint(self.state * self.high_obs)
-        ue_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
+        ue_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - -self.ue_ydest[0]) ** 2)
 
 
-        #if np.array_equal(state, self.gNB):
-        #    rwd = -350.0
-        #    done = False
-        if (ue_dist < 50):
-            rwd = 10.0#prev_rate + 20.0#self.rate + 2.0#2000.0
+        if (self.rate >= self.rate_threshold) and (ue_dist == 0):
+            rwd = 20.0
             done = True
-        elif (self.rate > prev_rate) and (ue_dist == prev_dist): #(self.rate >= self.rate_threshold) and
-            rwd = prev_rate#self.rate #100*self.rate
+        elif (self.rate >= self.rate_threshold) and (ue_dist < prev_dist):
+            rwd = 20*self.rate + 10*np.exp(-ue_dist/200) + 3
             done = False
-        elif (self.rate > prev_rate) and (ue_dist < prev_dist): #(self.rate >= self.rate_threshold) and
-            #val = 200*self.rate
-            #if (val < 80):
-            #    rwd =  np.exp(0.037*val) + 3.0 #20*self.rate + 20*np.exp(-ue_dist/200) +
-            #else:
-            rwd = prev_rate + 2.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+        elif (state[0] < np.min(self.ue_xloc)) or (state[0] > np.max(self.ue_xloc)):
+            rwd = -2.0
             done = False
-        #elif (self.rate < prev_rate) and (ue_dist < prev_dist):
-        #    rwd = 1.0
-        #    done = False
-        #elif (state[0] < self.ue_xdest[0]) or (state[0] > self.ue_xsrc[0]):
-        #    rwd = -2.0
-        #    done = False
-        #elif (state[1] < self.ue_ydest[0]) or (state[1] > self.ue_ysrc[0]):
-        #    rwd = -2.0
-        #    done = False
+        elif (state[1] < np.min(self.ue_yloc)) or (state[1] > np.max(self.ue_yloc)):
+            rwd = -2.0
+            done = False
         else:
-            rwd = prev_rate -2.0#-self.rate -2.0#-20.0
+            rwd = 0.0
             done = False
         #if (state[0] == state[-2] ) and (state[1] == state[-1]):
         #    return 1#True
@@ -277,8 +250,6 @@ class UAV_Env_v2(gym.Env):
     def decode_action(self, action_ndx):
         #ue_vy_ndx = action_ndx % len(self.ue_vy)
         #action_ndx = action_ndx // len(self.ue_vy)
-        #ue_v_ndx = action_ndx % len(self.ue_vx)
-        #action_ndx = action_ndx // len(self.ue_vx)
 
         ue_mv_ndx = action_ndx % len(self.ue_moves)
         action_ndx = action_ndx // len(self.ue_moves)
@@ -289,7 +260,6 @@ class UAV_Env_v2(gym.Env):
         assert 0<= action_ndx <= self.act_space.n
         return (beam_ndx, ue_mv_ndx)
 
-    #Not using this function
     def encode_action(self, beam_ndx, ue_vx_ndx, ue_vy_ndx):
         i = beam_ndx
         i*= self.N
@@ -305,20 +275,12 @@ class UAV_Env_v2(gym.Env):
     def choose_vel(self, ue_mv_ndx):
         ue_mv = self.ue_moves[ue_mv_ndx]
 
-        if ue_mv == 'L': #move left
-            ue_vx = -1 * self.ue_vx[0]
+        if ue_mv == 'L':
+            ue_vx = -1*np.random.choice(self.ue_vx)
             ue_vy = 0
-        elif ue_mv == 'U': #move up
+        elif ue_mv == 'U':
             ue_vx = 0
-            ue_vy = self.ue_vy[0]
-        elif ue_mv == 'D': #move down
-            ue_vx = 0
-            ue_vy = -1*self.ue_vy[0]
-        else: #move right
-            ue_vx = self.ue_vx[0]
-            ue_vy = 0
-
-        return ue_vx, ue_vy
+            ue_vy = np.random.choice(self.ue_vx)
 
     def get_Los_Rate(self, state):
 
@@ -331,7 +293,7 @@ class UAV_Env_v2(gym.Env):
 
         mimo_model = MIMO(ue_pos, self.gNB[0], sc_xyz, ch_model, self.ptx, self.N_tx, self.N_rx)
         SNR, rate = mimo_model.Los_Rate()  # rkbeam_vec, tbeam_vec )
-        #rate = 1e3 * rate
+
         return SNR, rate
 
     def get_Exh_Rate(self, state):
@@ -346,7 +308,6 @@ class UAV_Env_v2(gym.Env):
 
         for rbeam in self.BeamSet:#rbeam_vec:
             SNR, rate = mimo_exh_model.Calc_Rate(self.SF_time, np.array([rbeam, 0]))
-            #rate = 1e3 * rate
             exh_SNR.append(SNR)
             exh_rates.append(rate)
 

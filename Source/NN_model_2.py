@@ -17,20 +17,20 @@ class QNetwork(nn.Module):
         super(QNetwork,self).__init__()
         self.seed = torch.manual_seed(seed)
 
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=8, kernel_size=3,stride=1, padding=1)
-        nn.init.xavier_uniform_(self.conv1.weight)
-        nn.init.zeros_(self.conv1.bias)
-        self.bn1 = nn.BatchNorm1d(num_features=8)
+        #self.conv1 = nn.Conv1d(in_channels=1, out_channels=8, kernel_size=3,stride=1, padding=1)
+        #nn.init.xavier_uniform_(self.conv1.weight)
+        #nn.init.zeros_(self.conv1.bias)
+        #self.bn1 = nn.BatchNorm1d(num_features=8)
 
-        self.fc1 = nn.Linear(in_features=8*7,out_features=24)
+        self.fc1 = nn.Linear(in_features=2,out_features=128)
         nn.init.xavier_uniform_(self.fc1.weight)
         nn.init.zeros_(self.fc1.bias)
 
-        self.fc2 = nn.Linear(in_features=24, out_features=16)
+        self.fc2 = nn.Linear(in_features=128, out_features=128)
         nn.init.xavier_uniform_(self.fc2.weight)
         nn.init.zeros_(self.fc2.bias)
 
-        self.output = nn.Linear(in_features=16, out_features=action_size)
+        self.output = nn.Linear(in_features=128, out_features=action_size)
         nn.init.xavier_uniform_(self.output.weight)
         nn.init.zeros_(self.output.bias)
 
@@ -45,11 +45,11 @@ class QNetwork(nn.Module):
         t = inp_tensor
 
         #(2) hidden conv layer
-        t = self.conv1(t)
-        t = self.bn1(t)
-        t = F.relu(t)
+        #t = self.conv1(t)
+        #t = self.bn1(t)
+        #t = F.relu(t)
 
-        t= t.reshape(-1, 8*7)
+        #t= t.reshape(-1, 8*7)
         #(3) hidden linear layer
         t = self.fc1(t)
         t = F.relu(t)

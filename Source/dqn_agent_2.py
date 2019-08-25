@@ -77,9 +77,7 @@ class Agent():
         :return: Action
         """
         eps = self.strategy.get_exploration_rate(self.current_step)
-        self.current_step +=1
-
-
+        #self.current_step +=1
 
         if eps > random.random():
             action = random.randrange(self.action_size) #explore
@@ -118,13 +116,13 @@ class Agent():
         self.qnetwork_local.train()
 
         #Computing max predicted Q values (for next states) from target network model
-        Q_targets_next =self.qnetwork_target.forward(next_states).detach().max(1)[0].unsqueeze(1)
+        Q_targets_next =self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(1)
         #print("[Agent] Q_targets_next.shape: {}".format(Q_targets_next.shape))
         #Compute best Q targets for the current policy
         Q_targets = rewards + (gamma*Q_targets_next*(1-dones))
 
         #Compute Q values for current states, actions pairs
-        Q_expected = self.qnetwork_local.forward(states).gather(1, actions)
+        Q_expected = self.qnetwork_local(states).gather(1, actions)
         #print("[Agent] Q_expected.shape: {}".format(Q_expected.shape))
         #compute loss
         loss = F.mse_loss(Q_expected, Q_targets)
@@ -217,4 +215,5 @@ class EpsilonGreedyStrategy():
         self.decay = decay
 
     def get_exploration_rate(self, current_step):
-        return self.end + (self.start - self.end)*math.exp(-1. * current_step* self.decay)
+        #return self.end + (self.start - self.end)*math.exp(-1. * current_step* self.decay)
+        return max(self.end, (self.decay)**current_step)

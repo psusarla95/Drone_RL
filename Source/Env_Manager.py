@@ -1,7 +1,7 @@
 import gym
 import gym_uav
 import torch
-
+import numpy as np
 
 
 """
@@ -24,6 +24,7 @@ class EnvManager():
         self.env.close()
 
     def step(self, action_tensor):
+
         action = action_tensor.item()
         next_state, reward, done, _ = self.env.step(action)
 
@@ -36,4 +37,21 @@ class EnvManager():
     def num_actions_available(self):
         return self.env.act_space.n
 
+    def check_boundaries(self):
+        flag = False
 
+        ue_x = self.env.state[0]
+        ue_y = self.env.state[1]
+        ue_xdest = self.env.ue_xdest[0]
+        ue_ydest = self.env.ue_ydest[0]
+        ue_xmin = np.min(self.env.ue_xloc)
+        ue_ymin = np.min(self.env.ue_yloc)
+
+        if (ue_x > ue_xdest) or (ue_x < ue_xmin):
+            flag = True
+        elif (ue_y > ue_ydest) or (ue_y < ue_ymin):
+            flag = True
+        else:
+            flag = False
+        
+        return flag
