@@ -143,13 +143,15 @@ class UAV_Env_v2(gym.Env):
 
         new_ue_pos = np.array([new_ue_xloc, new_ue_yloc, 0])
 
+        rwd, done = self._gameover()
+
         self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
         #self.state = self.state.reshape((1, len(self.state)))
 
         self.mimo_model = MIMO(new_ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
 
-        prev_rate = self.rate
-        prev_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
+        self.prev_rate = self.rate
+        self.prev_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
         self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))#rkbeam_vec, tbeam_vec )
         #self.rate = 1e3*self.rate
 
@@ -157,26 +159,15 @@ class UAV_Env_v2(gym.Env):
 
         #rwd = self._reward(prev_dist)
         #print("[uav_env] rwd: {}".format(rwd))
-        rwd, done = self._gameover(prev_dist, prev_rate)
 
-        #if status == 1: #game over
-        #    done = True
-        #elif (status == -1) or (status == -2): #uav crossing boundaries
-        #    rwd = -2.0
-        #    done = True
-        #else:
-        #    done = False
 
         return self.state, rwd, done, {}
 
-    def reset(self):
+    def reset(self, rate_thr):
         # Note: should be a uniform random value between starting 4-5 SNR states
         #self.TB_r = get_TBD(ue, self.alpha)#Gen_RandomBeams(1, self.N)[0]  # one random TX beam
         #state_indices = self.obs_space.sample()
         xloc_ndx, yloc_ndx = self.obs_space.sample()
-
-
-
 
         #Start from a fixed start location
         self.state = np.array([self.ue_xloc[xloc_ndx],
@@ -188,17 +179,25 @@ class UAV_Env_v2(gym.Env):
 
         self.steps_done = 0
         self.rate = 0.0
+        self.prev_dist = np.Inf
+        self.prev_rate = 0.0
+        self.ue_path = []
+        self.ue_path.append(self.state)
+        self.ue_xsrc = self.state[0]
+        self.ue_ysrc = self.state[1]
 
         #Computing the rate threshold for the given destination
-        ue_dest = np.array([self.ue_xloc[xloc_ndx], self.ue_yloc[yloc_ndx], 0])
-        dest_mimo_model = MIMO(ue_dest, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
-        dest_SNR = []
-        dest_rates = []
-        for rbeam in self.BeamSet:  # rbeam_vec:
-            SNR, rate = dest_mimo_model.Calc_Rate(self.SF_time, np.array([rbeam, 0]))
-            dest_SNR.append(SNR)
-            dest_rates.append(rate)
-        self.rate_threshold = np.max(dest_rates)
+        #ue_dest = np.array([self.ue_xloc[xloc_ndx], self.ue_yloc[yloc_ndx], 0])
+        #dest_mimo_model = MIMO(ue_dest, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
+        #dest_SNR = []
+        #dest_rates = []
+        #for rbeam in self.BeamSet:  # rbeam_vec:
+        #    SNR, rate = dest_mimo_model.Calc_Rate(self.SF_time, np.array([rbeam, 0]))
+        #    dest_SNR.append(SNR)
+        #    dest_rates.append(rate)
+
+
+        self.rate_threshold = rate_thr #np.max(dest_rates)
 
         self.state = self.state / self.high_obs
         #self.state = self.state.reshape((1, len(self.state)))
@@ -228,50 +227,25 @@ class UAV_Env_v2(gym.Env):
         else:
             return 0.0#10*self.rate - 3
 
-    def _gameover(self, prev_dist, prev_rate):
+    def _gameover(self): #prev_dist, curr_rate):
         #ue_dist = np.sqrt(self.state[0][0]**2 + self.state[0][1]**2)
         #ue_dest_dist = np.sqrt(self.state[0][-2]**2 + self.state[0][-1]**2)
         #return ue_dist >= ue_dest_dist
         state = np.rint(self.state * self.high_obs)
         ue_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
 
-
-        #if np.array_equal(state, self.gNB):
-        #    rwd = -350.0
-        #    done = False
         if (ue_dist < 50):
-            rwd = 10.0#prev_rate + 20.0#self.rate + 2.0#2000.0
+            rwd = self.rate#self.rate + 2.0#2000.0
             done = True
-        elif (self.rate > prev_rate) and (ue_dist == prev_dist): #(self.rate >= self.rate_threshold) and
-            rwd = prev_rate#self.rate #100*self.rate
+        elif (self.rate >= self.rate_threshold) and (ue_dist == self.prev_dist): #(self.rate >= self.rate_threshold) and
+            rwd = 0.0#curr_rate#self.rate #100*self.rate
             done = False
-        elif (self.rate > prev_rate) and (ue_dist < prev_dist): #(self.rate >= self.rate_threshold) and
-            #val = 200*self.rate
-            #if (val < 80):
-            #    rwd =  np.exp(0.037*val) + 3.0 #20*self.rate + 20*np.exp(-ue_dist/200) +
-            #else:
-            rwd = prev_rate + 2.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+        elif (self.rate >= self.rate_threshold) and (ue_dist < self.prev_dist): #(self.rate >= self.rate_threshold) and
+            rwd = self.rate#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             done = False
-        #elif (self.rate < prev_rate) and (ue_dist < prev_dist):
-        #    rwd = 1.0
-        #    done = False
-        #elif (state[0] < self.ue_xdest[0]) or (state[0] > self.ue_xsrc[0]):
-        #    rwd = -2.0
-        #    done = False
-        #elif (state[1] < self.ue_ydest[0]) or (state[1] > self.ue_ysrc[0]):
-        #    rwd = -2.0
-        #    done = False
         else:
-            rwd = prev_rate -2.0#-self.rate -2.0#-20.0
+            rwd = -self.rate#-self.rate -2.0#-20.0
             done = False
-        #if (state[0] == state[-2] ) and (state[1] == state[-1]):
-        #    return 1#True
-        #elif (state[0] < np.min(self.ue_xloc)) or (state[0] > np.max(self.ue_xloc)):
-        #    return -1#True
-        #elif (state[1] < np.min(self.ue_yloc)) or (state[1] > np.max(self.ue_yloc)):
-        #    return -2#True
-        #else:
-        #    return 0#False
         return rwd, done
 
     def decode_action(self, action_ndx):
