@@ -181,7 +181,7 @@ class MIMO:
         #print("[MIMO] learnt RSSI_val: ", best_RSSI_val)
         #print("[MIMO] SNR : {0}".format(20*np.log10(best_SNR)))
         #rate =  np.log2(1 + best_SNR) * 1e-9  # in Gbit/s
-        rate = 5e1*rate
+        rate = 1e1*rate
         return SNR, rate
 
     def Los_Rate(self):
@@ -228,7 +228,7 @@ class MIMO:
             #print("[MIMO]val", val)
             #break
         #best_RSSI_val = rssi_los
-        rate= 5e1*rate
+        rate= 1e1*rate
         return SNR, rate
 
 def plotbeam(ang, n):

@@ -16,8 +16,8 @@ class EnvManager():
         self.env.seed(seed)
         self.done = False
 
-    def reset(self):
-        self.state = self.env.reset()
+    def reset(self, rate_thr):
+        self.state = self.env.reset(rate_thr)
         return torch.tensor(self.state, device=self.device, dtype=torch.float32).unsqueeze(0)
 
     def close(self):
@@ -53,5 +53,5 @@ class EnvManager():
             flag = True
         else:
             flag = False
-        
+
         return flag

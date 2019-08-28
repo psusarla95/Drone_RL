@@ -6,6 +6,9 @@ from Source.MIMO import MIMO
 #from Source.Misc import *
 from Source.miscfun.geometry import *
 
+# This is the 3D plotting toolkit
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 ''''
 ####################################
@@ -155,6 +158,12 @@ class UAV_Env_v2(gym.Env):
         self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))#rkbeam_vec, tbeam_vec )
         #self.rate = 1e3*self.rate
 
+        new_ue_xndx = np.where(self.ue_xloc ==new_ue_xloc)[0][0]
+        new_ue_yndx = np.where(self.ue_yloc == new_ue_yloc)[0][0]
+        self.ue_path_rates.append(self.rate)
+        #self.ue_path_rates.append(self.rate)
+        self.ue_path.append(np.array([new_ue_xloc, new_ue_yloc]))
+
         self.steps_done += 1
 
         #rwd = self._reward(prev_dist)
@@ -185,7 +194,8 @@ class UAV_Env_v2(gym.Env):
         self.ue_path.append(self.state)
         self.ue_xsrc = self.state[0]
         self.ue_ysrc = self.state[1]
-
+        self.ue_path_rates = [0.0]
+        #self.ue_path_rates = []
         #Computing the rate threshold for the given destination
         #ue_dest = np.array([self.ue_xloc[xloc_ndx], self.ue_yloc[yloc_ndx], 0])
         #dest_mimo_model = MIMO(ue_dest, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
@@ -204,7 +214,71 @@ class UAV_Env_v2(gym.Env):
         return self.state
 
     def render(self, mode='human', close=False):
-        pass
+        #fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+
+        #x_axis = [x[0] for x in self.ue_path]
+        #y_axis = [x[1] for x in self.ue_path]
+        #z_axis = self.ue_path_rates
+        #plt.plot(x_axis, y_axis)
+
+        #plt.show()
+
+        from matplotlib.path import Path
+        import matplotlib.patches as patches
+
+        verts = [(int(x[0]),int(x[1])) for x in self.ue_path]
+        print(self.ue_path)
+        print(verts)
+
+        codes = [Path.LINETO for x in range(len(verts))]
+        codes[0] = Path.MOVETO
+        codes[-1] = Path.STOP
+
+        path = Path(verts, codes)
+
+        fig = plt.figure(figsize=(10,10))
+        ax = fig.add_subplot(111)
+        patch = patches.PathPatch(path, facecolor='none', lw=2)
+        ax.add_patch(patch)
+
+        xs, ys = zip(*verts)
+        ax.plot(xs, ys, 'x--', lw=2, color='black')
+
+        #xdisplay, ydisplay = ax.transData.transform_point((self.ue_xsrc, self.ue_ysrc))
+
+        bbox = dict(boxstyle="round", fc="0.8")
+        arrowprops = dict(
+            arrowstyle="->",
+            connectionstyle="angle,angleA=0,angleB=90,rad=10")
+
+        offset = 40
+        ax.annotate('Src = (%d, %d)' % (self.ue_xsrc, self.ue_ysrc),
+                    (self.ue_xsrc, self.ue_ysrc), xytext=(-2 * offset, offset), textcoords='offset points',
+                    bbox=bbox, arrowprops=arrowprops)
+
+        ax.annotate('Dest = (%d, %d)' % (self.ue_xdest[0], self.ue_ydest[0]),
+                           (self.ue_xdest[0], self.ue_ydest[0]), xytext=(0.5 * offset, -offset),
+                           textcoords='offset points',
+                           bbox=bbox, arrowprops=arrowprops)
+
+
+        offset= 10
+        bbox =dict(boxstyle="round", facecolor='yellow', edgecolor='none')
+        for i in range(1,len(self.ue_path_rates)):
+            ax.annotate('%.2f' % np.around(self.ue_path_rates[i], decimals=2),
+                        (verts[i][0], verts[i][1]), xytext=(-2 * offset, offset), textcoords='offset points',
+                        bbox=bbox, arrowprops=arrowprops)
+
+        ax.grid()
+        ax.set_xticks(self.ue_xloc)
+        ax.set_yticks(self.ue_yloc)
+        ax.set_title("UAV graph w.r.t gNB [0,0,0]")
+        ax.set_xlabel("X direction")
+        ax.set_ylabel("Y direction")
+
+        plt.show()
+
+        return
 
     #Not using this function
     def _reward(self, prev_dist):
@@ -235,7 +309,7 @@ class UAV_Env_v2(gym.Env):
         ue_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
 
         if (ue_dist < 50):
-            rwd = self.rate#self.rate + 2.0#2000.0
+            rwd = 2.1#self.rate + 2.0#2000.0
             done = True
         elif (self.rate >= self.rate_threshold) and (ue_dist == self.prev_dist): #(self.rate >= self.rate_threshold) and
             rwd = 0.0#curr_rate#self.rate #100*self.rate
