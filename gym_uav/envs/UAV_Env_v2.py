@@ -146,16 +146,15 @@ class UAV_Env_v2(gym.Env):
 
         new_ue_pos = np.array([new_ue_xloc, new_ue_yloc, 0])
 
-        rwd, done = self._gameover()
-
-        self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
-        #self.state = self.state.reshape((1, len(self.state)))
-
         self.mimo_model = MIMO(new_ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
+        rwd, done = self._gameover(rbs, self.mimo_model.az_aod)
 
         self.prev_rate = self.rate
         self.prev_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
         self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))#rkbeam_vec, tbeam_vec )
+        self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
+
+
         #self.rate = 1e3*self.rate
 
         new_ue_xndx = np.where(self.ue_xloc ==new_ue_xloc)[0][0]
@@ -227,8 +226,8 @@ class UAV_Env_v2(gym.Env):
         import matplotlib.patches as patches
 
         verts = [(int(x[0]),int(x[1])) for x in self.ue_path]
-        print(self.ue_path)
-        print(verts)
+        #print(self.ue_path)
+        #print(verts)
 
         codes = [Path.LINETO for x in range(len(verts))]
         codes[0] = Path.MOVETO
@@ -301,7 +300,7 @@ class UAV_Env_v2(gym.Env):
         else:
             return 0.0#10*self.rate - 3
 
-    def _gameover(self): #prev_dist, curr_rate):
+    def _gameover(self, aoa, aod): #prev_dist, curr_rate):
         #ue_dist = np.sqrt(self.state[0][0]**2 + self.state[0][1]**2)
         #ue_dest_dist = np.sqrt(self.state[0][-2]**2 + self.state[0][-1]**2)
         #return ue_dist >= ue_dest_dist
@@ -309,16 +308,16 @@ class UAV_Env_v2(gym.Env):
         ue_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
 
         if (ue_dist < 50):
-            rwd = 2.1#self.rate + 2.0#2000.0
+            rwd = 3.0#3.1#2.1#self.rate + 2.0#2000.0
             done = True
-        elif (self.rate >= self.rate_threshold) and (ue_dist == self.prev_dist): #(self.rate >= self.rate_threshold) and
-            rwd = 0.0#curr_rate#self.rate #100*self.rate
+        elif (np.around(aoa-aod, decimals=2) == 3.14) and (ue_dist == self.prev_dist): #(self.rate >= self.rate_threshold) and
+            rwd = 0.0#self.rate#curr_rate#self.rate #100*self.rate
             done = False
-        elif (self.rate >= self.rate_threshold) and (ue_dist < self.prev_dist): #(self.rate >= self.rate_threshold) and
-            rwd = self.rate#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+        elif (np.around(aoa-aod, decimals=2) == 3.14) and (ue_dist < self.prev_dist): #(self.rate >= self.rate_threshold) and
+            rwd = 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             done = False
         else:
-            rwd = -self.rate#-self.rate -2.0#-20.0
+            rwd = -1.0#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
         return rwd, done
 
@@ -399,6 +398,7 @@ class UAV_Env_v2(gym.Env):
             exh_rates.append(rate)
 
         best_rbeam_ndx = np.argmax(exh_rates)
+        #print("[UAV_Env]: AOD: {}, AoA: {}".format(mimo_exh_model.channel.az_aod, self.BeamSet[best_rbeam_ndx]))
         return self.BeamSet[best_rbeam_ndx], np.max(exh_rates) #(Best RBS, Best Rate)
 
     def get_Rate(self):
