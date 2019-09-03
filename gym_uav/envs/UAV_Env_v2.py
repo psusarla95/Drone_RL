@@ -144,14 +144,14 @@ class UAV_Env_v2(gym.Env):
             new_ue_xloc = ue_xloc + ue_vx
             new_ue_yloc = max(ue_yloc + ue_vy, np.min(self.ue_yloc))
 
-        new_ue_pos = np.array([new_ue_xloc, new_ue_yloc, 0])
-
-        self.mimo_model = MIMO(new_ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
+        cur_ue_pos = np.array([ue_xloc, ue_yloc, 0])
+        self.mimo_model = MIMO(cur_ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
         rwd, done = self._gameover(rbs, self.mimo_model.az_aod)
 
-        self.prev_rate = self.rate
-        self.prev_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
-        self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))#rkbeam_vec, tbeam_vec )
+        self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))  # rkbeam_vec, tbeam_vec )
+
+        self.cur_rate = self.rate
+        self.cur_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
         self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
 
 
@@ -187,8 +187,8 @@ class UAV_Env_v2(gym.Env):
 
         self.steps_done = 0
         self.rate = 0.0
-        self.prev_dist = np.Inf
-        self.prev_rate = 0.0
+        self.cur_dist = np.Inf
+        self.cur_rate = 0.0
         self.ue_path = []
         self.ue_path.append(self.state)
         self.ue_xsrc = self.state[0]
@@ -305,16 +305,16 @@ class UAV_Env_v2(gym.Env):
         #ue_dest_dist = np.sqrt(self.state[0][-2]**2 + self.state[0][-1]**2)
         #return ue_dist >= ue_dest_dist
         state = np.rint(self.state * self.high_obs)
-        ue_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
+        next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
 
-        if (ue_dist < 50):
-            rwd = 3.0#3.1#2.1#self.rate + 2.0#2000.0
+        if (next_dist < 50):
+            rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
             done = True
-        elif (np.around(aoa-aod, decimals=2) == 3.14) and (ue_dist == self.prev_dist): #(self.rate >= self.rate_threshold) and
-            rwd = 0.0#self.rate#curr_rate#self.rate #100*self.rate
-            done = False
-        elif (np.around(aoa-aod, decimals=2) == 3.14) and (ue_dist < self.prev_dist): #(self.rate >= self.rate_threshold) and
+        elif (np.around(aoa-aod, decimals=2) == 3.14) and (next_dist < self.cur_dist): #(self.rate >= self.rate_threshold) and
             rwd = 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+            done = False
+        elif (np.around(aoa-aod, decimals=2) == 3.14) and (next_dist == self.cur_dist): #(self.rate >= self.rate_threshold) and
+            rwd = 0.0#self.rate#curr_rate#self.rate #100*self.rate
             done = False
         else:
             rwd = -1.0#-self.rate-1.0#-self.rate -2.0#-20.0
