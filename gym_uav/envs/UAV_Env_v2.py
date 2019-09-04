@@ -193,7 +193,7 @@ class UAV_Env_v2(gym.Env):
         self.ue_path.append(self.state)
         self.ue_xsrc = self.state[0]
         self.ue_ysrc = self.state[1]
-        self.ue_path_rates = [0.0]
+        self.ue_path_rates = []
         #self.ue_path_rates = []
         #Computing the rate threshold for the given destination
         #ue_dest = np.array([self.ue_xloc[xloc_ndx], self.ue_yloc[yloc_ndx], 0])
@@ -263,7 +263,7 @@ class UAV_Env_v2(gym.Env):
 
         offset= 10
         bbox =dict(boxstyle="round", facecolor='yellow', edgecolor='none')
-        for i in range(1,len(self.ue_path_rates)):
+        for i in range(0,len(self.ue_path_rates)):
             ax.annotate('%.2f' % np.around(self.ue_path_rates[i], decimals=2),
                         (verts[i][0], verts[i][1]), xytext=(-2 * offset, offset), textcoords='offset points',
                         bbox=bbox, arrowprops=arrowprops)
@@ -306,19 +306,31 @@ class UAV_Env_v2(gym.Env):
         #return ue_dist >= ue_dest_dist
         state = np.rint(self.state * self.high_obs)
         next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
+        ang_1 = 3.14 - np.around(np.pi/self.N,decimals=2)
+        ang_2 = 3.14 + np.around(np.pi/self.N,decimals=2)
+        ang_3 = 2*3.14 - np.around(np.pi/self.N,decimals=2)
+        ang_4 = 2*3.14
 
-        if (next_dist < 50):
+        if (next_dist < 50) and (ang_1 < np.around(aoa-aod, decimals=2) < ang_2):
             rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
             done = True
-        elif (np.around(aoa-aod, decimals=2) == 3.14) and (next_dist < self.cur_dist): #(self.rate >= self.rate_threshold) and
+        elif (next_dist < 50) and (ang_3 < np.around(aoa-aod, decimals=2) < ang_4):
+            rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
+            done = True
+        elif (ang_1 < np.around(aoa-aod, decimals=2) < ang_2) and (next_dist < self.cur_dist): #(self.rate >= self.rate_threshold) and
             rwd = 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             done = False
-        elif (np.around(aoa-aod, decimals=2) == 3.14) and (next_dist == self.cur_dist): #(self.rate >= self.rate_threshold) and
-            rwd = 0.0#self.rate#curr_rate#self.rate #100*self.rate
+        elif (ang_3 < np.around(aoa-aod, decimals=2) < ang_4) and (next_dist < self.cur_dist): #(self.rate >= self.rate_threshold) and
+            rwd = 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             done = False
+        #elif (np.around(aoa-aod, decimals=2) == 3.14) and (next_dist > self.cur_dist): #(self.rate >= self.rate_threshold) and
+        #    rwd = 1.0#self.rate#curr_rate#self.rate #100*self.rate
+        #    done = False
         else:
             rwd = -1.0#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
+        self.aoa = aoa
+        self.aod = aod
         return rwd, done
 
     def decode_action(self, action_ndx):
@@ -398,7 +410,7 @@ class UAV_Env_v2(gym.Env):
             exh_rates.append(rate)
 
         best_rbeam_ndx = np.argmax(exh_rates)
-        #print("[UAV_Env]: AOD: {}, AoA: {}".format(mimo_exh_model.channel.az_aod, self.BeamSet[best_rbeam_ndx]))
+        #print("[UAV_Env]: AOD: {}, AoA: {}, AoA-AoD: {}".format(mimo_exh_model.channel.az_aod, self.BeamSet[best_rbeam_ndx], self.BeamSet[best_rbeam_ndx]-mimo_exh_model.channel.az_aod))
         return self.BeamSet[best_rbeam_ndx], np.max(exh_rates) #(Best RBS, Best Rate)
 
     def get_Rate(self):
