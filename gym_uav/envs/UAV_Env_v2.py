@@ -308,24 +308,24 @@ class UAV_Env_v2(gym.Env):
         next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
         ang_1 = 3.14 - np.around(np.pi/self.N,decimals=2)
         ang_2 = 3.14 + np.around(np.pi/self.N,decimals=2)
-        ang_3 = 2*3.14 - np.around(np.pi/self.N,decimals=2)
-        ang_4 = 2*3.14
+        ang_3 = 0#2*3.14 - np.around(np.pi/self.N,decimals=2)
+        ang_4 = np.around(np.pi/self.N,decimals=2)#2*3.14
 
-        if (next_dist < 50) and (ang_1 < np.around(aoa-aod, decimals=2) < ang_2):
+        #if (next_dist < 50) and (ang_1 < np.around(aod-aoa, decimals=2) < ang_2):
+        if (next_dist < 50):
             rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
             done = True
-        elif (next_dist < 50) and (ang_3 < np.around(aoa-aod, decimals=2) < ang_4):
-            rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
-            done = True
-        elif (ang_1 < np.around(aoa-aod, decimals=2) < ang_2) and (next_dist < self.cur_dist): #(self.rate >= self.rate_threshold) and
-            rwd = 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+        #elif (next_dist < 50) and (ang_3 < np.around(aod-aoa, decimals=2) < ang_4):
+        #    rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
+        #    done = True
+        #elif (next_dist < self.cur_dist) and (ang_1 < np.around(aod-aoa, decimals=2) < ang_2): #(ang_1 < np.around(aod-aoa, decimals=2) < ang_2) and
+        elif (self.rate >= self.rate_threshold):
+            rwd = 2*np.exp(-1*(self.steps_done-1)/10)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             done = False
-        elif (ang_3 < np.around(aoa-aod, decimals=2) < ang_4) and (next_dist < self.cur_dist): #(self.rate >= self.rate_threshold) and
-            rwd = 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
-            done = False
-        #elif (np.around(aoa-aod, decimals=2) == 3.14) and (next_dist > self.cur_dist): #(self.rate >= self.rate_threshold) and
-        #    rwd = 1.0#self.rate#curr_rate#self.rate #100*self.rate
+        #elif (ang_3 < np.around(aod-aoa, decimals=2) < ang_4) and (next_dist < self.cur_dist): #(self.rate >= self.rate_threshold) and
+        #    rwd = 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
         #    done = False
+
         else:
             rwd = -1.0#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
@@ -410,13 +410,34 @@ class UAV_Env_v2(gym.Env):
             exh_rates.append(rate)
 
         best_rbeam_ndx = np.argmax(exh_rates)
-        #print("[UAV_Env]: AOD: {}, AoA: {}, AoA-AoD: {}".format(mimo_exh_model.channel.az_aod, self.BeamSet[best_rbeam_ndx], self.BeamSet[best_rbeam_ndx]-mimo_exh_model.channel.az_aod))
+        #print("[UAV_Env]: AOD: {}, AoA: {}, AoD-AoA: {}".format(mimo_exh_model.channel.az_aod[0], self.BeamSet[best_rbeam_ndx], -self.BeamSet[best_rbeam_ndx]+mimo_exh_model.channel.az_aod[0]))
         return self.BeamSet[best_rbeam_ndx], np.max(exh_rates) #(Best RBS, Best Rate)
 
     def get_Rate(self):
         return self.rate
 
 
+
+
+def Generate_BeamDir(N):
+    #if np.min(self.ue_xloc) < 0 and np.max(self.ue_xloc) > 0:
+
+    min_ang = 0#-math.pi/2
+    max_ang = np.pi#math.pi/2
+    step_size = (max_ang-min_ang)/N
+    beam_angles = np.arange(min_ang+step_size, max_ang+step_size, step_size)
+
+    BeamSet = []#np.zeros(N)#np.fft.fft(np.eye(N))
+
+    #B_i = (i)pi/(N-1), forall 0 <= i <= N-1; 0< beta < pi/(N-1)
+    val = min_ang
+    for i in range(N):
+        BeamSet.append(np.arctan2(np.sin(beam_angles[i]), np.cos(beam_angles[i])))#(i+1)*(max_ang-min_ang)/(N)
+
+    return np.array(BeamSet) #eval(strBeamSet_list)#np.ndarray.tolist(BeamSet)
+
+
+'''
 def Generate_BeamDir(N):
     min_ang = 0#-math.pi/2
     max_ang = np.pi#math.pi/2
@@ -431,7 +452,7 @@ def Generate_BeamDir(N):
 
     return np.array(BeamSet) #eval(strBeamSet_list)#np.ndarray.tolist(BeamSet)
 
-'''
+
 def Gen_RandomBeams(k, N):
 
     BeamSet = Generate_BeamDir(N)

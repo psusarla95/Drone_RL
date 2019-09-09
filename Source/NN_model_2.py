@@ -23,15 +23,18 @@ class QNetwork(nn.Module):
         #self.bn1 = nn.BatchNorm1d(num_features=8)
 
         self.fc1 = nn.Linear(in_features=2,out_features=128)
-        nn.init.xavier_uniform_(self.fc1.weight)
+        #nn.init.xavier_uniform_(self.fc1.weight)
+        nn.init.kaiming_normal_(self.fc1.weight, mode='fan_in', nonlinearity='relu')
         nn.init.zeros_(self.fc1.bias)
 
         self.fc2 = nn.Linear(in_features=128, out_features=128)
-        nn.init.xavier_uniform_(self.fc2.weight)
+        #nn.init.xavier_uniform_(self.fc2.weight)
+        nn.init.kaiming_normal_(self.fc2.weight, mode='fan_in', nonlinearity='relu')
         nn.init.zeros_(self.fc2.bias)
 
         self.output = nn.Linear(in_features=128, out_features=action_size)
-        nn.init.xavier_uniform_(self.output.weight)
+        #nn.init.xavier_uniform_(self.output.weight)
+        nn.init.kaiming_normal_(self.output.weight, mode='fan_in', nonlinearity='relu')
         nn.init.zeros_(self.output.bias)
 
     def forward(self, inp_tensor):

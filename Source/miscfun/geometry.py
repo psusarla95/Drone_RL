@@ -6,6 +6,7 @@ def cart2sph(x, y, z):
     r = np.hypot(hxy, z)
     el = np.arctan2(z, hxy)
     az = np.arctan2(y, x)
+    az = az + 2*np.pi
     return az, el, r
 
 def sph2cart(az, el, r):
