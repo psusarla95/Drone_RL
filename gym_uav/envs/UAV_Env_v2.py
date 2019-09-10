@@ -311,21 +311,20 @@ class UAV_Env_v2(gym.Env):
         ang_3 = 0#2*3.14 - np.around(np.pi/self.N,decimals=2)
         ang_4 = np.around(np.pi/self.N,decimals=2)#2*3.14
 
-        #if (next_dist < 50) and (ang_1 < np.around(aod-aoa, decimals=2) < ang_2):
-        if (next_dist < 50):
+        if (next_dist < 50) and (ang_1 < np.around(aod-aoa, decimals=2) < ang_2):
+        #if (next_dist < 50) and (self.rate >= self.rate_threshold):
             rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
             done = True
-        #elif (next_dist < 50) and (ang_3 < np.around(aod-aoa, decimals=2) < ang_4):
-        #    rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
-        #    done = True
-        #elif (next_dist < self.cur_dist) and (ang_1 < np.around(aod-aoa, decimals=2) < ang_2): #(ang_1 < np.around(aod-aoa, decimals=2) < ang_2) and
-        elif (self.rate >= self.rate_threshold):
-            rwd = 2*np.exp(-1*(self.steps_done-1)/10)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+        elif (next_dist < 50) and (ang_3 < np.around(aod-aoa, decimals=2) < ang_4):
+            rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
+            done = True
+        elif (ang_1 < np.around(aod-aoa, decimals=2) < ang_2): #(ang_1 < np.around(aod-aoa, decimals=2) < ang_2) and
+        #elif (self.rate >= self.rate_threshold):
+            rwd = 2.0*np.exp(-1*(self.steps_done-1)/20)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             done = False
-        #elif (ang_3 < np.around(aod-aoa, decimals=2) < ang_4) and (next_dist < self.cur_dist): #(self.rate >= self.rate_threshold) and
-        #    rwd = 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
-        #    done = False
-
+        elif (ang_3 < np.around(aod-aoa, decimals=2) < ang_4): #(self.rate >= self.rate_threshold) and
+            rwd = 2.0 * np.exp(-1 * (self.steps_done - 1) / 10)  # 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+            done = False
         else:
             rwd = -1.0#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
