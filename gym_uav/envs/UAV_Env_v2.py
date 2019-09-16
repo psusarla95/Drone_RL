@@ -300,6 +300,15 @@ class UAV_Env_v2(gym.Env):
         else:
             return 0.0#10*self.rate - 3
 
+    def dest_check(self):
+        reached = False
+        state = np.rint(self.state * self.high_obs)
+        next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
+
+        if next_dist < 50:
+            reached = True
+        return reached
+
     def _gameover(self, aoa, aod): #prev_dist, curr_rate):
         #ue_dist = np.sqrt(self.state[0][0]**2 + self.state[0][1]**2)
         #ue_dest_dist = np.sqrt(self.state[0][-2]**2 + self.state[0][-1]**2)
@@ -311,20 +320,20 @@ class UAV_Env_v2(gym.Env):
         ang_3 = 0#2*3.14 - np.around(np.pi/self.N,decimals=2)
         ang_4 = np.around(np.pi/self.N,decimals=2)#2*3.14
 
-        if (next_dist < 50) and (ang_1 < np.around(aod-aoa, decimals=2) < ang_2):
-        #if (next_dist < 50) and (self.rate >= self.rate_threshold):
-            rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
+        #if (next_dist < 50) and (ang_1 < np.around(aod-aoa, decimals=2) < ang_2):
+        if self.dest_check() and (self.rate >= self.rate_threshold):
+            rwd = 1.5#3.1#2.1#self.rate + 2.0#2000.0
             done = True
-        elif (next_dist < 50) and (ang_3 < np.around(aod-aoa, decimals=2) < ang_4):
-            rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
-            done = True
-        elif (ang_1 < np.around(aod-aoa, decimals=2) < ang_2): #(ang_1 < np.around(aod-aoa, decimals=2) < ang_2) and
-        #elif (self.rate >= self.rate_threshold):
-            rwd = 2.0*np.exp(-1*(self.steps_done-1)/20)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+        #elif (next_dist < 50) and (ang_3 < np.around(aod-aoa, decimals=2) < ang_4):
+        #    rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
+        #    done = True
+        #elif (ang_1 < np.around(aod-aoa, decimals=2) < ang_2): #(ang_1 < np.around(aod-aoa, decimals=2) < ang_2) and
+        elif (self.rate >= self.rate_threshold):
+            rwd = 1.0*np.exp(-1*(self.steps_done-1)/50) * np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             done = False
-        elif (ang_3 < np.around(aod-aoa, decimals=2) < ang_4): #(self.rate >= self.rate_threshold) and
-            rwd = 2.0 * np.exp(-1 * (self.steps_done - 1) / 10)  # 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
-            done = False
+        #elif (ang_3 < np.around(aod-aoa, decimals=2) < ang_4): #(self.rate >= self.rate_threshold) and
+        #    rwd = 1.0 * np.exp(-1 * (self.steps_done - 1) / 10)  # 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+        #    done = False
         else:
             rwd = -1.0#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
