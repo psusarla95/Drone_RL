@@ -144,16 +144,16 @@ class UAV_Env_v2(gym.Env):
             new_ue_xloc = ue_xloc + ue_vx
             new_ue_yloc = max(ue_yloc + ue_vy, np.min(self.ue_yloc))
 
-        cur_ue_pos = np.array([ue_xloc, ue_yloc, 0])
-        self.mimo_model = MIMO(cur_ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
-        rwd, done = self._gameover(rbs, self.mimo_model.az_aod)
+        new_ue_pos = np.array([new_ue_xloc, new_ue_yloc, 0])
+        self.mimo_model = MIMO(new_ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
+
 
         self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))  # rkbeam_vec, tbeam_vec )
 
         self.cur_rate = self.rate
         self.cur_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
         self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
-
+        rwd, done = self._gameover(rbs, self.mimo_model.az_aod)
 
         #self.rate = 1e3*self.rate
 
@@ -265,7 +265,7 @@ class UAV_Env_v2(gym.Env):
         bbox =dict(boxstyle="round", facecolor='yellow', edgecolor='none')
         for i in range(0,len(self.ue_path_rates)):
             ax.annotate('%.2f' % np.around(self.ue_path_rates[i], decimals=2),
-                        (verts[i][0], verts[i][1]), xytext=(-2 * offset, offset), textcoords='offset points',
+                        (verts[i+1][0], verts[i+1][1]), xytext=(-2 * offset, offset), textcoords='offset points',
                         bbox=bbox, arrowprops=arrowprops)
 
         ax.grid()
@@ -329,7 +329,7 @@ class UAV_Env_v2(gym.Env):
         #    done = True
         #elif (ang_1 < np.around(aod-aoa, decimals=2) < ang_2): #(ang_1 < np.around(aod-aoa, decimals=2) < ang_2) and
         elif (self.rate >= self.rate_threshold):
-            rwd = 1.0*np.exp(-1*(self.steps_done-1)/50) * np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+            rwd = 1.0*np.exp(-1*(self.steps_done-1)/50) *np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             done = False
         #elif (ang_3 < np.around(aod-aoa, decimals=2) < ang_4): #(self.rate >= self.rate_threshold) and
         #    rwd = 1.0 * np.exp(-1 * (self.steps_done - 1) / 10)  # 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
