@@ -330,13 +330,13 @@ class UAV_Env_v2(gym.Env):
             rwd = 1.0#3.1#2.1#self.rate + 2.0#2000.0
             done = True
 
-        elif (self.rate >= self.rate_threshold):
-            rwd = 1.0*np.exp(-1*(self.steps_done-1)/50) *np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
-            done = False
-
         elif self.dest_check():
             rwd = -1.0
             done = True
+
+        elif (self.rate >= self.rate_threshold):
+            rwd = 1.0*np.exp(-1*(self.steps_done-1)/50) *np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+            done = False
         #elif (ang_3 < np.around(aod-aoa, decimals=2) < ang_4): #(self.rate >= self.rate_threshold) and
         #    rwd = 1.0 * np.exp(-1 * (self.steps_done - 1) / 10)  # 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
         #    done = False
