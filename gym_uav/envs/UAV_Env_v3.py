@@ -16,19 +16,34 @@ from mpl_toolkits.mplot3d import Axes3D
 ####################################
 UAV_Env - UAV Environment
 
-Model Characteristics:
+Ground Base Station (gNB) Characteristics:
 - Considers a MIMO model with mmwave frequency
 - Considers a fixed Ptx, Ntx, NRx
 - Chooses
   UAV moves - U - Up,L - Left, R- Right, D- Down 
   Beam Directions - Receiver Beam Direction (RBD)
   UAV location - UAV_xloc, UAV_yloc, UAV_zloc
+  Data Rate, Signl-to-Noise-Ratio - rate, SNR
   as the main parameters for this RF Beam model 
 
-- Observation space - [0,1,2,.....,179] -> [-120, -119, -118,......,60]
-- Action space - [0,1,2,.......5624] -> [(-60,-60,1,1), ......(RBS,TBS,RBeamWidth,TBeamWidth).......(60,60,3,3)]
+- Observation space - [(-500,-500),(-500,-450).....(uav_xloc,uav_yloc)....(450,500),(500,500)] 
+- Action space - [0,1,2,.......NRx*4] -> [(pi/NRx,'U'),(pi/NRx,'L'), (pi/NRx, 'R'), 
+                 (pi/NRx, 'D')......(RBD,UAV_move).......(7pi/NRx,'D')]
 
 - Transmit Power= 30 dB, N_tx= 1, N_rx=8
+
+
+UAV characteristics:
+- moves in a 2D (x,y) grid (z direction is assumed to be '0')
+- Transmit Power is fixed Ptx = 30 dB
+- Transmits a single Beam in LoS direction
+- moves with constant speed v_x, v_y in x and y direction. v_x = 50ms-1, v_y=50ms-1
+
+
+Channel characteristics:
+- predefined through the env definition (self.channel)
+- Free Space Path (fsp) Loss modelling with no scattering is assumed
+- One gNB and one UE drone scenario 
 '''
 
 
@@ -36,35 +51,40 @@ class UAV_Env_v3(gym.Env):
     """
     Description:
     A UAV moves in a region within the coverage area of the base station.
-    The objective of the problem is to guide UAV in a rate requirement path,
-    reaching the destination in an energy minimized way as possible with the help of gNB
+    The objective of the problem is to guide UAV (using gNB)in a rate requirement path,
+    reaching the destination in an energy minimized way as early as possible
 
     Observation:
         Type: MultiDiscrete(2,)
-        Num Observation     Min     Max
-        1   UAV_xloc       -500.0   500.0
-        2   UAV_yloc       -500.0   500.0
+        Num Observation     Min     Max     Step
+        1   UAV_xloc       -500.0   500.0   50.0
+        2   UAV_yloc       -500.0   500.0   50.0
 
     Action:
         Type:Discrete(Nrx*num(uav_moves))
-        Num     Action
-        0       Bdir 0
-        1       Bdir 1
-        ...     ....
-        Nrx-1   Bdir {Nrx-1}
+        Num                   Action
+        0                   Bdir0, mov0
+        1                   Bdir0, mov1
+        2                   Bdir0, mov2
+        3                   Bdir0, mov3
+        4                   Bdir 1, ...
+        ...                     ....
+        (Nrx-1)*uav_moves   Bdir{Nrx-1}, mov3
 
     Reward:
-        Reward is rate value computed for every step taken, including the termination step. Rate value measured is [0.0, 4.0]
+        Reward is value computed based on rate measurements and energy minimization conditions. Range [-1.0, 1.0]
 
     Starting State:
-        All observations are assigned a uniform random value in their respective Min Max range
+        Obs_space.sample() - Any random location with the Observation range
 
     Episode Termination:
-        When UAV makes N hops or N steps from the starting state
+        When UAV reaches the defined destination D
     """
 
     def __init__(self):
 
+        #Antenna Modelling
+        #Uniform Linear Arrays (ULA) antenna modelling is considered
         self.N_tx = 1 # Num of transmitter antenna elements
         self.N_rx = 8  # Num of receiver antenna elements
         self.count = 0
@@ -72,12 +92,11 @@ class UAV_Env_v3(gym.Env):
         self.SF_time = 20 #msec - for 60KHz carrier frequency in 5G
         self.alpha = 0
 
-        # (x1,y1,z1) of UE_source location
-        self.ue_s = None#[10,15,0]
-        #self.ue_v = None
 
-
+        #Base Statin Locations
         self.gNB = np.array([[0,0,0]])#, [20,30,0], [40,60,0]]
+
+        #Channel
         self.sc_xyz= np.array([])
         self.ch_model= 'fsp'
         self.N = self.N_rx #Overall beam directions
@@ -87,13 +106,12 @@ class UAV_Env_v3(gym.Env):
         self.state = None
         self.rate = None
         self.rate_threshold = None  # good enough QoS val (Rate)
-        self.Nhops = 5
 
         #UE information
         self.ue_step = 50
-        self.ue_xloc = np.arange(-500, 550, 50)  #10 locs
+        self.ue_xloc = np.arange(-500, 550, self.ue_step)  #10 locs
         #self.ue_xloc = np.delete(self.ue_xloc, np.argwhere(self.ue_xloc == 0)) #remove (0,0) from ue_xloc
-        self.ue_yloc = np.arange(-500,550, 50)     #5 locs
+        self.ue_yloc = np.arange(-500,550, self.ue_step)     #5 locs
         #self.ue_yloc = np.delete(self.ue_yloc, np.argwhere(self.ue_yloc == 0))  # remove (0,0) from ue_xloc
         self.ue_vx = np.array([50,100]) #3 speed parameters
         self.ue_vy = np.array([50,100]) #3 speed parameters
@@ -104,13 +122,16 @@ class UAV_Env_v3(gym.Env):
         self.ue_moves = np.array(['L', 'R', 'U', 'D'])  # moving direction of UAV
 
         self.seed()
+
+        #Observation and Action Spaces
+
         #low_obs = np.array([-500, 0, 0.0, 10.0, 10.0])
         self.high_obs = np.array([np.max(self.ue_xloc), np.max(self.ue_yloc)])
         self.obs_space = spaces.MultiDiscrete([len(self.ue_xloc), #ue_xloc
                                                len(self.ue_yloc), #ue_yloc
                                              ])
 
-        self.act_space = spaces.Discrete(self.N*len(self.ue_moves)) #n(RBD)*n(ue_xvel)*n(ue_yvel)
+        self.act_space = spaces.Discrete(self.N*len(self.ue_moves)) #n(RBD)*n(ue_moves)
 
 
     def seed(self, seed=None):
@@ -145,9 +166,9 @@ class UAV_Env_v3(gym.Env):
             new_ue_yloc = max(ue_yloc + ue_vy, np.min(self.ue_yloc))
 
         new_ue_pos = np.array([new_ue_xloc, new_ue_yloc, 0])
+
+        #Approximating (0,0) to (20,20) location to prevent rate->Inf
         if(new_ue_xloc == 0) and (new_ue_yloc == 0):
-            #self.SNR = -1.0
-            #self.rate = -1.0
             self.mimo_model = MIMO(np.array([20, 20, 0]), self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
             self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))  # rkbeam_vec, tbeam_vec )
 
@@ -160,19 +181,10 @@ class UAV_Env_v3(gym.Env):
         self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
         rwd, done = self._gameover()
 
-        #self.rate = 1e3*self.rate
-
-        new_ue_xndx = np.where(self.ue_xloc ==new_ue_xloc)[0][0]
-        new_ue_yndx = np.where(self.ue_yloc == new_ue_yloc)[0][0]
         self.ue_path_rates.append(self.rate)
-        #self.ue_path_rates.append(self.rate)
         self.ue_path.append(np.array([new_ue_xloc, new_ue_yloc]))
 
         self.steps_done += 1
-
-        #rwd = self._reward(prev_dist)
-        #print("[uav_env] rwd: {}".format(rwd))
-
 
         return self.state, rwd, done, {}
 
@@ -278,7 +290,7 @@ class UAV_Env_v3(gym.Env):
         state = np.rint(self.state * self.high_obs)
         next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
 
-        if next_dist < 50:
+        if next_dist < self.ue_step:
             reached = True
         return reached
 
