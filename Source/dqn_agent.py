@@ -12,7 +12,7 @@ BUFFER_SIZE = int(1e5)      #replay buffer size
 BATCH_SIZE = 60             #minibatch size
 GAMMA = 0.99                #discount factor
 TAU = 1e-3                  #for soft update of target parameters
-LR = 5e-4                   #learning rate
+LR = 5e-3                   #learning rate
 UPDATE_EVERY = 10            #how often to update the network
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -102,7 +102,7 @@ class Agent():
         self.qnetwork_local.train()
 
         #Computing max predicted Q values (for next states) from target network model
-        Q_targets_next =self.qnetwork_target.forward(states).detach().max(1)[0].unsqueeze(1)
+        Q_targets_next =self.qnetwork_target.forward(next_states).detach().max(1)[0].unsqueeze(1)
         #print("[Agent] Q_targets_next.shape: {}".format(Q_targets_next.shape))
         #Compute best Q targets for the current policy
         Q_targets = rewards + (gamma*Q_targets_next*(1-dones))

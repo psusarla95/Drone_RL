@@ -164,9 +164,9 @@ class UAV_Env(gym.Env):
         #else:
         #    return 0
         if(self.rate > self.rate_threshold):
-            return 100*self.rate +3
+            return 10*self.rate +3 #np.exp(self.rate-self.rate_threshold-1)
         else:
-            return 100*self.rate -3
+            return 0#10*self.rate -3
 
     def _gameover(self):
         return (self.steps_done == self.Nhops)
