@@ -169,7 +169,7 @@ class UAV_Env_v3(gym.Env):
 
         #Approximating (0,0) to (20,20) location to prevent rate->Inf
         if(new_ue_xloc == 0) and (new_ue_yloc == 0):
-            self.mimo_model = MIMO(np.array([20, 20, 0]), self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
+            self.mimo_model = MIMO(np.array([40, 40, 0]), self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
             self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))  # rkbeam_vec, tbeam_vec )
 
         else:
@@ -323,7 +323,8 @@ class UAV_Env_v3(gym.Env):
             done = True
 
         elif (self.rate >= self.rate_threshold) and (not (next_dist == self.cur_dist)):
-            rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*np.log10(self.rate+2)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+
+            rwd = 0.5*np.exp(-1*(self.steps_done-1)/50)*np.log10(self.rate+1)#np.exp(self.rate/10)/15#*np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             done = False
         #elif (ang_3 < np.around(aod-aoa, decimals=2) < ang_4): #(self.rate >= self.rate_threshold) and
         #    rwd = 1.0 * np.exp(-1 * (self.steps_done - 1) / 10)  # 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
@@ -391,7 +392,7 @@ class UAV_Env_v3(gym.Env):
         ue_pos = np.array([ue_xloc, ue_yloc, 0])
 
         if (ue_xloc == 0) and (ue_yloc) == 0:
-            ue_pos = np.array([ue_xloc+20, ue_yloc+20, 0])
+            ue_pos = np.array([ue_xloc+40, ue_yloc+40, 0])
 
         mimo_model = MIMO(ue_pos, self.gNB[0], sc_xyz, ch_model, self.ptx, self.N_tx, self.N_rx)
         SNR, rate = mimo_model.Los_Rate()  # rkbeam_vec, tbeam_vec )
@@ -405,7 +406,7 @@ class UAV_Env_v3(gym.Env):
 
         if (ue_xloc == 0) and (ue_yloc) == 0:
             #return -1.0,-1.0
-            ue_pos = np.array([ue_xloc + 20, ue_yloc + 20, 0])
+            ue_pos = np.array([ue_xloc + 40, ue_yloc + 40, 0])
 
 
         mimo_exh_model = MIMO(ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
