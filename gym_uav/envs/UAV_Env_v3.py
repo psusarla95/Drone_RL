@@ -179,7 +179,16 @@ class UAV_Env_v3(gym.Env):
         self.cur_rate = self.rate
         self.cur_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
         self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
-        rwd, done = self._gameover()
+
+        if self.measure == 'rate_thr_path':
+            rwd, done = self._gameover()
+        elif self.measure == 'rate_path':
+            rwd, done = self.rate_path_gameover()
+        elif self.measure == 'short_path':
+            rwd, done = self.short_path_gameover()
+        else:
+            print("Err: Incorrect measure str\n")
+            rwd, done = -100.0, True
 
         self.ue_path_rates.append(self.rate)
         self.ue_path.append(np.array([new_ue_xloc, new_ue_yloc]))
@@ -188,7 +197,7 @@ class UAV_Env_v3(gym.Env):
 
         return self.state, rwd, done, {}
 
-    def reset(self, rate_thr):
+    def reset(self, rate_thr, meas):
 
         #state_indices = self.obs_space.sample()
         xloc_ndx, yloc_ndx = self.obs_space.sample()
@@ -210,6 +219,7 @@ class UAV_Env_v3(gym.Env):
         self.ue_xsrc = self.state[0]
         self.ue_ysrc = self.state[1]
         self.ue_path_rates = []
+        self.measure = meas
         #self.ue_path_rates = []
 
         self.rate_threshold = rate_thr #np.max(dest_rates)
@@ -295,47 +305,63 @@ class UAV_Env_v3(gym.Env):
         return reached
 
     def _gameover(self):
-        #ue_dist = np.sqrt(self.state[0][0]**2 + self.state[0][1]**2)
-        #ue_dest_dist = np.sqrt(self.state[0][-2]**2 + self.state[0][-1]**2)
-        #return ue_dist >= ue_dest_dist
         state = np.rint(self.state * self.high_obs)
         next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
-        ang_1 = 3.14 - np.around(np.pi/self.N,decimals=2)
-        ang_2 = 3.14 + np.around(np.pi/self.N,decimals=2)
-        ang_3 = 0#2*3.14 - np.around(np.pi/self.N,decimals=2)
-        ang_4 = np.around(np.pi/self.N,decimals=2)#2*3.14
 
-        #if (next_dist < 50) and (ang_1 < np.around(aod-aoa, decimals=2) < ang_2):
-
-        #elif (next_dist < 50) and (ang_3 < np.around(aod-aoa, decimals=2) < ang_4):
-        #    rwd = 2.0#3.1#2.1#self.rate + 2.0#2000.0
-        #    done = True
-        #elif (ang_1 < np.around(aod-aoa, decimals=2) < ang_2): #(ang_1 < np.around(aod-aoa, decimals=2) < ang_2) and
-        #if (state[0] == 0) and (state[1] == 0):
-        #    rwd = -2.0
-        #    done = False
         if (self.dest_check()) and (self.rate >= self.rate_threshold):
             rwd = 1.0#3.1#2.1#self.rate + 2.0#2000.0
             done = True
-
         elif self.dest_check():
             rwd = -1.0
             done = True
-
         elif (self.rate >= self.rate_threshold) and (not (next_dist == self.cur_dist)):
 
             #rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*max(22-self.rate,0)/22*np.log10(0.5*self.rate+1)#*np.exp(self.rate/10)/20#np.log10(max(21.5-self.rate, 0)+1)/3#*np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
             rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*min(0.2+(self.rate-self.rate_threshold)/22.0, 1.0-self.rate/22.0)#0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
             #print(rwd)
             done = False
-        #elif (ang_3 < np.around(aod-aoa, decimals=2) < ang_4): #(self.rate >= self.rate_threshold) and
-        #    rwd = 1.0 * np.exp(-1 * (self.steps_done - 1) / 10)  # 1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
-        #    done = False
         else:
             rwd = -1.0#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
-        #self.aoa = aoa
-        #self.aod = aod
+
+        return rwd, done
+
+
+    #Reward Function for max rate path
+    def rate_path_gameover(self):
+        state = np.rint(self.state * self.high_obs)
+        next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
+
+        if (self.dest_check()):
+            rwd = 1.0  # 3.1#2.1#self.rate + 2.0#2000.0
+            done = True
+        elif (not (next_dist == self.cur_dist)):
+
+            # rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*max(22-self.rate,0)/22*np.log10(0.5*self.rate+1)#*np.exp(self.rate/10)/20#np.log10(max(21.5-self.rate, 0)+1)/3#*np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+            rwd = 1.0 * np.exp(-1 * (self.steps_done - 1) / 50) * min(0.2 + (self.rate) / 22.0, 1.0 - self.rate / 22.0)  # 0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
+            # print(rwd)
+            done = False
+        else:
+            rwd = -1.0  # -self.rate-1.0#-self.rate -2.0#-20.0
+            done = False
+
+        return rwd, done
+
+    #Reward function for shortest path
+    def short_path_gameover(self):
+        state = np.rint(self.state * self.high_obs)
+        next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
+
+        if (self.dest_check()):
+            rwd = 1.0  # 3.1#2.1#self.rate + 2.0#2000.0
+            done = True
+        elif (next_dist < self.cur_dist):
+            rwd = 0.2
+            done = False
+        else:
+            rwd = -1.0
+            done = False
+
         return rwd, done
 
     def decode_action(self, action_ndx):
