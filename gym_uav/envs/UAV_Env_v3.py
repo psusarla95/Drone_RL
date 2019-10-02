@@ -308,20 +308,24 @@ class UAV_Env_v3(gym.Env):
         state = np.rint(self.state * self.high_obs)
         next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
 
-        if (self.dest_check()) and (self.rate >= self.rate_threshold):
-            rwd = 1.0#3.1#2.1#self.rate + 2.0#2000.0
+        #if (self.dest_check()) and (self.rate >= self.rate_threshold):
+        #    rwd = 1.0#3.1#2.1#self.rate + 2.0#2000.0
+        #    done = True
+        if self.dest_check():
+            rwd = 1.0
             done = True
-        elif self.dest_check():
-            rwd = -1.0
-            done = True
-        elif (self.rate >= self.rate_threshold) and (not (next_dist == self.cur_dist)):
+        elif (self.rate >= self.rate_threshold) and (next_dist < self.cur_dist):
 
-            #rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*max(22-self.rate,0)/22*np.log10(0.5*self.rate+1)#*np.exp(self.rate/10)/20#np.log10(max(21.5-self.rate, 0)+1)/3#*np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
-            rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*min(0.2+(self.rate-self.rate_threshold)/22.0, 1.0-self.rate/22.0)#0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
+            #rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*np.log10(max(21-self.rate,0)+1)#*np.exp(self.rate/10)/20#np.log10(max(21.5-self.rate, 0)+1)/3#*np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+            rwd = 0.5*np.exp(-1*(self.steps_done-1)/50)*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))#0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
             #print(rwd)
             done = False
+
+        elif (self.rate >= self.rate_threshold) and (next_dist > self.cur_dist):
+            rwd = 0.2*np.exp(-1*(self.steps_done-1)/50)*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))
+            done = False
         else:
-            rwd = -1.0#-self.rate-1.0#-self.rate -2.0#-20.0
+            rwd = -1.0*np.exp(-1*(self.steps_done-1)/50)*np.exp(-self.rate/20)#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
 
         return rwd, done
@@ -335,14 +339,19 @@ class UAV_Env_v3(gym.Env):
         if (self.dest_check()):
             rwd = 1.0  # 3.1#2.1#self.rate + 2.0#2000.0
             done = True
-        elif (not (next_dist == self.cur_dist)):
 
-            # rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*max(22-self.rate,0)/22*np.log10(0.5*self.rate+1)#*np.exp(self.rate/10)/20#np.log10(max(21.5-self.rate, 0)+1)/3#*np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
-            rwd = 1.0 * np.exp(-1 * (self.steps_done - 1) / 50) * min(0.2 + (self.rate) / 22.0, 1.0 - self.rate / 22.0)  # 0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
+        elif (next_dist < self.cur_dist):
+
+            # rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*np.log10(max(21-self.rate,0)+1)#*np.exp(self.rate/10)/20#np.log10(max(21.5-self.rate, 0)+1)/3#*np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
+            rwd = 0.5 * np.exp(-1 * (self.steps_done - 1) / 50) * np.exp(self.rate / 20)  # *min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))#0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
             # print(rwd)
             done = False
+
+        elif (next_dist > self.cur_dist):
+            rwd = 0.2 * np.exp(-1 * (self.steps_done - 1) / 50) * np.exp(self.rate / 20)  # *min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))
+            done = False
         else:
-            rwd = -1.0  # -self.rate-1.0#-self.rate -2.0#-20.0
+            rwd = -1.0 * np.exp(-1 * (self.steps_done - 1) / 50) * np.exp(-self.rate / 20)  # -self.rate-1.0#-self.rate -2.0#-20.0
             done = False
 
         return rwd, done
