@@ -197,10 +197,11 @@ class UAV_Env_v3(gym.Env):
 
         return self.state, rwd, done, {}
 
-    def reset(self, rate_thr, meas):
+    def reset(self, rate_thr, meas, state_indices):
 
         #state_indices = self.obs_space.sample()
-        xloc_ndx, yloc_ndx = self.obs_space.sample()
+        #xloc_ndx, yloc_ndx = self.obs_space.sample()
+        xloc_ndx, yloc_ndx = state_indices
 
         #Start from a random start location
         self.state = np.array([self.ue_xloc[xloc_ndx],
@@ -312,20 +313,27 @@ class UAV_Env_v3(gym.Env):
         #    rwd = 1.0#3.1#2.1#self.rate + 2.0#2000.0
         #    done = True
         if self.dest_check():
-            rwd = 1.0
+            rwd = 1.0*np.log10(8*self.rate + 1)#*np.log10(self.rate + 1) #*np.exp(-self.steps_done/100)
             done = True
         elif (self.rate >= self.rate_threshold) and (next_dist < self.cur_dist):
 
             #rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*np.log10(max(21-self.rate,0)+1)#*np.exp(self.rate/10)/20#np.log10(max(21.5-self.rate, 0)+1)/3#*np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
-            rwd = 0.5*np.exp(-1*(self.steps_done-1)/50)*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))#0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
+            rwd = 0.5#*np.log10(self.rate + 1)#*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))#0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
             #print(rwd)
+            done = False
+        elif (next_dist < self.cur_dist):
+            rwd = 0.5*np.exp(-next_dist/1000)*np.log10(8*self.rate + 1)#*np.exp(-self.rate/20)#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
 
         elif (self.rate >= self.rate_threshold) and (next_dist > self.cur_dist):
-            rwd = 0.2*np.exp(-1*(self.steps_done-1)/50)*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))
+            rwd = 0.5*np.exp(-next_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.rate + 1)#*np.log10(self.rate + 1)#*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))
+            done = False
+
+        elif (next_dist > self.cur_dist):
+            rwd = 0.2*np.exp(-next_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.rate + 1)#*np.exp(-self.rate/20)#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
         else:
-            rwd = -1.0*np.exp(-1*(self.steps_done-1)/50)*np.exp(-self.rate/20)#-self.rate-1.0#-self.rate -2.0#-20.0
+            rwd = 0.0
             done = False
 
         return rwd, done
