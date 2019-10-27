@@ -142,7 +142,7 @@ class MIMO:
 
         # Noise for freq domain
         N0 = self.Noise()
-        gau = np.zeros((self.N_rx, 1), dtype=np.complex)
+        gau = np.zeros((self.N_rx,1), dtype=np.complex)
         for i in range(gau.shape[0]):
             gau[i] = complex(np.random.randn(), np.random.randn())
         noise = np.sqrt(N0 / 2) * gau
@@ -167,7 +167,8 @@ class MIMO:
         for i in range(h.shape[2]):
             #energy_val = np.sqrt(self.N_tx*self.N_rx) * h * np.matmul(np.matmul(np.matmul(wRF.conj().T, a_rx), a_tx.conj().T),fRF)  # + np.matmul(wRF.conj().T, noise)
             #val = np.sqrt(self.N_tx * self.N_rx) * np.matmul(np.matmul(wRF.conj().T, h[:,:,i]), fRF)  # + np.matmul(wRF.conj().T, noise)
-            rssi_val = np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF))**2#+ np.conj(wRF.T).dot(noise))
+            #print(np.conj(wRF.T).dot(noise))
+            rssi_val = np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF)+ (np.conj(wRF.T).dot(noise))[0])**2#
             #energy_val += val
             SNR = Es * rssi_val / N0
             rate += self.B/self.nFFT* np.log2(1 + SNR) * 1e-9  # in Gbit/s

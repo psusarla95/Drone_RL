@@ -142,14 +142,18 @@ class UAV_Env_v3(gym.Env):
         assert self.act_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
         state = np.rint(self.state * self.high_obs)
-
         rbd_ndx, ue_mv_ndx = self.decode_action(action)
         ue_vx, ue_vy = self.choose_vel(ue_mv_ndx)
         rbs = self.BeamSet[rbd_ndx]
         ue_xdest = self.ue_xdest[0]
         ue_ydest = self.ue_ydest[0]
-
         ue_xloc, ue_yloc = state
+
+        self.cur_dist = np.sqrt((ue_xloc - ue_xdest) ** 2 + (ue_yloc - ue_ydest) ** 2)  # x**2 + y**2
+        self.cur_state = state
+
+        if self.done: #reached terminal state
+            return self.state, self.rwd, self.done, {}
 
         ue_mv = self.ue_moves[ue_mv_ndx]
         if ue_mv == 'L':
@@ -176,26 +180,33 @@ class UAV_Env_v3(gym.Env):
             self.mimo_model = MIMO(new_ue_pos, self.gNB[0], self.sc_xyz, self.ch_model, self.ptx, self.N_tx, self.N_rx)
             self.SNR, self.rate = self.mimo_model.Calc_Rate(self.SF_time, np.array([rbs, 0]))  # rkbeam_vec, tbeam_vec )
 
-        self.cur_rate = self.rate
-        self.cur_dist = np.sqrt((ue_xloc-ue_xdest)**2 + (ue_yloc-ue_ydest)**2) #x**2 + y**2
-        self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
-
         if self.measure == 'rate_thr_path':
-            rwd, done = self._gameover()
+            self.rwd, self.done = self._gameover()
         elif self.measure == 'rate_path':
-            rwd, done = self.rate_path_gameover()
+            self.rwd, self.done = self.rate_path_gameover()
         elif self.measure == 'short_path':
-            rwd, done = self.short_path_gameover()
+            self.rwd, self.done = self.short_path_gameover()
         else:
             print("Err: Incorrect measure str\n")
-            rwd, done = -100.0, True
+            self.rwd, self.done = -100.0, True
 
         self.ue_path_rates.append(self.rate)
         self.ue_path.append(np.array([new_ue_xloc, new_ue_yloc]))
 
+        self.cur_rate = self.rate
+        self.prev_dist = self.cur_dist
+        self.state = np.array([new_ue_xloc, new_ue_yloc]) / self.high_obs
+
+
         self.steps_done += 1
 
-        return self.state, rwd, done, {}
+        return self.state, self.rwd, self.done, {}
+
+    def beyond_border(self,ue_xpos, ue_ypos):
+        if (ue_xpos == np.min(self.ue_xloc)) or (ue_xpos == np.max(self.ue_xloc)) or (ue_ypos == np.min(self.ue_yloc)) or (ue_ypos == np.max(self.ue_yloc)):
+            return True
+        else:
+            return False
 
     def reset(self, rate_thr, meas, state_indices):
 
@@ -213,19 +224,24 @@ class UAV_Env_v3(gym.Env):
 
         self.steps_done = 0
         self.rate = 0.0
-        self.cur_dist = np.Inf
-        self.cur_rate = 0.0
+
         self.ue_path = []
-        self.ue_path.append(self.state)
+        #self.ue_path.append(self.state)
         self.ue_xsrc = self.state[0]
         self.ue_ysrc = self.state[1]
         self.ue_path_rates = []
         self.measure = meas
+        self.rwd = 0.0
+        self.done = False
         #self.ue_path_rates = []
 
         self.rate_threshold = rate_thr #np.max(dest_rates)
 
         self.state = self.state / self.high_obs
+        self.prev_dist = np.Inf
+
+        #_, self.cur_rate = self.get_Exh_Rate(self.state)
+        self.cur_rate = 0.0
         #self.state = self.state.reshape((1, len(self.state)))
         return self.state
 
@@ -282,7 +298,7 @@ class UAV_Env_v3(gym.Env):
         bbox =dict(boxstyle="round", facecolor='yellow', edgecolor='none')
         for i in range(0,len(self.ue_path_rates)):
             ax.annotate('%.2f' % np.around(self.ue_path_rates[i], decimals=2),
-                        (verts[i+1][0], verts[i+1][1]), xytext=(-2 * offset, offset), textcoords='offset points',
+                        (verts[i][0], verts[i][1]), xytext=(-2 * offset, offset), textcoords='offset points',
                         bbox=bbox, arrowprops=arrowprops)
 
         ax.grid()
@@ -298,44 +314,52 @@ class UAV_Env_v3(gym.Env):
 
     def dest_check(self):
         reached = False
-        state = np.rint(self.state * self.high_obs)
-        next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
+        #state = self.cur_state#np.rint(self.cur_state * self.high_obs)
+        #curr_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
 
-        if next_dist < self.ue_step:
+        if self.cur_dist < self.ue_step:
             reached = True
         return reached
 
     def _gameover(self):
-        state = np.rint(self.state * self.high_obs)
-        next_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
+        #state = np.rint(self.state * self.high_obs)
+        #curr_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
 
         #if (self.dest_check()) and (self.rate >= self.rate_threshold):
         #    rwd = 1.0#3.1#2.1#self.rate + 2.0#2000.0
         #    done = True
+
         if self.dest_check():
             rwd = 1.0*np.log10(8*self.rate + 1)#*np.log10(self.rate + 1) #*np.exp(-self.steps_done/100)
             done = True
-        elif (self.rate >= self.rate_threshold) and (next_dist < self.cur_dist):
+        elif (self.cur_rate >= self.rate_threshold): #and (self.cur_dist < self.prev_dist):
 
             #rwd = 1.0*np.exp(-1*(self.steps_done-1)/50)*np.log10(max(21-self.rate,0)+1)#*np.exp(self.rate/10)/20#np.log10(max(21.5-self.rate, 0)+1)/3#*np.log10(self.rate+1)# np.exp(self.rate/50)#1.0#self.rate+1.0#self.rate + 2.0 #10*np.log10(val+1) + 2.0
-            rwd = 0.5#*np.log10(self.rate + 1)#*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))#0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
+            rwd = 0.6*np.exp(-self.cur_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.rate + 1)#*np.exp(-2*(self.steps_done-1)/50)#*np.log10(self.rate + 1)#*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))#0.5 * np.exp(-1 * (self.steps_done - 1) / 50) *(1-self.rate/30)
             #print(rwd)
             done = False
-        elif (next_dist < self.cur_dist):
-            rwd = 0.5*np.exp(-next_dist/1000)*np.log10(8*self.rate + 1)#*np.exp(-self.rate/20)#-self.rate-1.0#-self.rate -2.0#-20.0
+        elif (self.cur_dist < self.prev_dist):
+            rwd = 0.8*np.exp(-self.cur_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.rate + 1)#*np.exp(-self.rate/20)#-self.rate-1.0#-self.rate -2.0#-20.0
             done = False
 
-        elif (self.rate >= self.rate_threshold) and (next_dist > self.cur_dist):
-            rwd = 0.5*np.exp(-next_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.rate + 1)#*np.log10(self.rate + 1)#*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))
+        elif (self.cur_dist > self.prev_dist): #self.cur_rate >= self.rate_threshold) and
+            rwd = 0.2*np.exp(-self.cur_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.rate + 1)#*np.log10(self.rate + 1)#*np.exp(self.rate/20)#*min(np.exp(self.rate/20), np.exp((self.rate_threshold-self.rate)/20.0))
             done = False
 
-        elif (next_dist > self.cur_dist):
-            rwd = 0.2*np.exp(-next_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.rate + 1)#*np.exp(-self.rate/20)#-self.rate-1.0#-self.rate -2.0#-20.0
-            done = False
+        #elif (self.beyond_border(self.cur_state[0], self.cur_state[1])):
+        #    rwd = 0.3*np.exp(-curr_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.rate + 1)
+        #    done = False
+        #elif (self.cur_dist >= self.prev_dist):
+        #    rwd = 0.2*np.exp(-self.cur_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.cur_rate + 1)#*np.exp(-self.rate/20)#-self.rate-1.0#-self.rate -2.0#-20.0
+        #    done = False
         else:
-            rwd = 0.0
+            rwd = 0.0#0.2*np.exp(-self.cur_dist/1000)*np.exp(-2*(self.steps_done-1)/50)*np.log10(8*self.rate + 1)
             done = False
 
+        #done = False
+        #if self.dest_check():
+        #    done = True
+        #rwd = np.log10(8*self.rate + 1) + np.exp(-self.cur_dist/1000)*np.exp(-2*(self.steps_done-1)/50)
         return rwd, done
 
 
@@ -470,7 +494,7 @@ class UAV_Env_v3(gym.Env):
         return self.BeamSet[best_rbeam_ndx], np.max(exh_rates) #(Best RBS, Best Rate)
 
     def get_Rate(self):
-        return self.rate
+        return self.cur_rate
 
 
 
