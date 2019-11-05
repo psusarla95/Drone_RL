@@ -32,7 +32,12 @@ class QNetwork(nn.Module):
         nn.init.kaiming_normal_(self.fc2.weight, mode='fan_in', nonlinearity='relu')
         nn.init.zeros_(self.fc2.bias)
 
-        self.output = nn.Linear(in_features=128, out_features=action_size)
+        self.fc3 = nn.Linear(in_features=128, out_features=64)
+        #nn.init.xavier_uniform_(self.fc2.weight)
+        nn.init.kaiming_normal_(self.fc3.weight, mode='fan_in', nonlinearity='relu')
+        nn.init.zeros_(self.fc3.bias)
+
+        self.output = nn.Linear(in_features=64, out_features=action_size)
         #nn.init.xavier_uniform_(self.output.weight)
         nn.init.kaiming_normal_(self.output.weight, mode='fan_in', nonlinearity='relu')
         nn.init.zeros_(self.output.bias)
@@ -59,6 +64,10 @@ class QNetwork(nn.Module):
 
         #(4) hidden linear layer
         t = self.fc2(t)
+        t = F.relu(t)
+
+        #(4) hidden linear layer
+        t = self.fc3(t)
         t = F.relu(t)
 
         out = self.output(t)

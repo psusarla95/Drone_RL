@@ -126,8 +126,6 @@ class MIMO:
         N0 = db2lin(N0dBm) * (10 ** -3)  # in WHz-1
         return N0
 
-
-
     def Calc_Rate(self, Tf, RB_ang):  # best_RSSI_val):
         self.steps = 0
         Tf = Tf * 1e-3  # for msec
@@ -137,6 +135,7 @@ class MIMO:
         # calc_SNR
         Es = self.Transmit_Energy()
         h = self.channel.get_h()#self.Channel()
+
 
         #print("[MIMO] h: ", h.shape)
 
@@ -164,14 +163,19 @@ class MIMO:
         energy_val = 0
         SNR = 0
         rate = 0.0
+        rssi_val = 0.0
         for i in range(h.shape[2]):
             #energy_val = np.sqrt(self.N_tx*self.N_rx) * h * np.matmul(np.matmul(np.matmul(wRF.conj().T, a_rx), a_tx.conj().T),fRF)  # + np.matmul(wRF.conj().T, noise)
             #val = np.sqrt(self.N_tx * self.N_rx) * np.matmul(np.matmul(wRF.conj().T, h[:,:,i]), fRF)  # + np.matmul(wRF.conj().T, noise)
             #print(np.conj(wRF.T).dot(noise))
-            rssi_val = np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF)+ (np.conj(wRF.T).dot(noise))[0])**2#
+            rssi_val += np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF)+ (np.conj(wRF.T).dot(noise))[0])**2#
             #energy_val += val
-            SNR = Es * rssi_val / N0
-            rate += self.B/self.nFFT* np.log2(1 + SNR) * 1e-9  # in Gbit/s
+        SNR = Es * rssi_val / N0
+        rate = self.B*np.log2(1 + SNR) * 1e-9  # in Gbit/s
+
+        #rssi_val = np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h)).dot(fRF))**2# + (np.conj(wRF.T).dot(noise))[0]) ** 2
+        #SNR = Es * rssi_val / N0
+        #rate = self.B*(1-self.T_sym/Tf_time) * np.log2(1 + SNR) * 1e-9  # in Gbit/s
         #print("[MIMO] energy_val: {0}", energy_val)
         #rssi_val[j] = energy_val
 
@@ -182,10 +186,79 @@ class MIMO:
         #print("[MIMO] learnt RSSI_val: ", best_RSSI_val)
         #print("[MIMO] SNR : {0}".format(20*np.log10(best_SNR)))
         #rate =  np.log2(1 + best_SNR) * 1e-9  # in Gbit/s
-        rate = 1e2*rate
+        #rate = 1e2*rate
+        return SNR, rate
+
+    def Calc_ExhRate(self, Tf, RB_ang, noise_flag=True):  # best_RSSI_val):
+        self.steps = 0
+        Tf = Tf * 1e-3  # for msec
+        ktf = np.ceil(Tf / self.T_sym)
+        Tf_time = ktf * self.T_sym
+
+        # calc_SNR
+        Es = self.Transmit_Energy()
+        h = self.channel.get_h()#self.Channel()
+
+
+        #print("[MIMO] h: ", h.shape)
+
+        # Noise for freq domain
+        N0 = self.Noise()
+        gau = np.zeros((self.N_rx,1), dtype=np.complex)
+        for i in range(gau.shape[0]):
+            gau[i] = complex(np.random.randn(), np.random.randn())
+        noise = np.sqrt(N0 / 2) * gau
+
+        #print("[MIMO]theta_tx: {0}, phi_rx: {1}, RB_ang: {2}, TB_ang{3}".format(self.theta_tx, self.phi_rx, RB_ang, TB_ang))
+        wRF = ula.steervec(self.N_rx, RB_ang[0], RB_ang[1]) #RB_ang-> (az_RB, el_RB)
+        #print("[MIMO] wRF:{0}".format(wRF))
+        #print("[MIMO] RB_ang[0]: {0}, RB_ang[1]: {1}".format(RB_ang[0], RB_ang[1]))
+        # transmit beamforming vector
+
+        #rssi_val = np.zeros(self.npath)
+        #for j in range(rssi_val.shape[0]):
+        fRF = ula.steervec(self.N_tx, self.az_aod[0], self.el_aod[0])
+        #print("[MIMO] az_aod:{0}, el_aod:{1}, az_aoa:{2}, el_aoa:{3}".format(self.az_aod[0], self.el_aod[0], self.az_aoa[0], self.el_aoa[0]))
+        #print("[MIMO] fRF:{0}".format(fRF))
+        #print("[MIMO] channel: {0}".format(h.shape))
+
+        #rssi_val = np.zeros(h.shape[2])
+        energy_val = 0
+        SNR = 0
+        rate = 0.0
+        rssi_val = 0.0
+        for i in range(h.shape[2]):
+            #energy_val = np.sqrt(self.N_tx*self.N_rx) * h * np.matmul(np.matmul(np.matmul(wRF.conj().T, a_rx), a_tx.conj().T),fRF)  # + np.matmul(wRF.conj().T, noise)
+            #val = np.sqrt(self.N_tx * self.N_rx) * np.matmul(np.matmul(wRF.conj().T, h[:,:,i]), fRF)  # + np.matmul(wRF.conj().T, noise)
+            #print(np.conj(wRF.T).dot(noise))
+            if(noise_flag):
+                rssi_val += np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF)+ (np.conj(wRF.T).dot(noise))[0])**2#
+            else:
+                rssi_val += np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF))**2
+            #energy_val += val
+        SNR = Es * rssi_val / N0
+        rate = self.B* (1-self.T_sym/Tf_time)*np.log2(1 + SNR) * 1e-9  # in Gbit/s
+
+        #rssi_val = np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h)).dot(fRF))**2# + (np.conj(wRF.T).dot(noise))[0]) ** 2
+        #SNR = Es * rssi_val / N0
+        #rate = self.B*(1-self.T_sym/Tf_time) * np.log2(1 + SNR) * 1e-9  # in Gbit/s
+        #print("[MIMO] energy_val: {0}", energy_val)
+        #rssi_val[j] = energy_val
+
+        #best_RSSI_val = energy_val#((energy_val.real) ** 2 + (energy_val.imag) ** 2)
+        #self.steps = self.steps + 1
+
+        #best_SNR = Es * best_RSSI_val / N0
+        #print("[MIMO] learnt RSSI_val: ", best_RSSI_val)
+        #print("[MIMO] SNR : {0}".format(20*np.log10(best_SNR)))
+        #rate =  np.log2(1 + best_SNR) * 1e-9  # in Gbit/s
+        #rate = 1e2*rate
         return SNR, rate
 
     def Los_Rate(self):
+        Tf = 20 * 1e-3  # for msec
+        ktf = np.ceil(Tf / self.T_sym)
+        Tf_time = ktf * self.T_sym
 
         # calc_SNR
         Es = self.Transmit_Energy()
@@ -221,15 +294,16 @@ class MIMO:
         rssi_los = 0
         SNR = 0
         rate = 0.0
+        rssi_val = 0.0
         for i in range(h.shape[2]):
-            rssi_val = np.abs(np.sqrt(self.N_rx*self.N_tx)* np.array(np.conj(a_rx.T).dot(h[:,:,i])).dot(a_tx))**2#+ np.conj(a_rx.T).dot(noise))
+            rssi_val += np.abs(np.sqrt(self.N_rx*self.N_tx)* np.array(np.conj(a_rx.T).dot(h[:,:,i])).dot(a_tx))**2#+ np.conj(a_rx.T).dot(noise))
             #rssi_los += val
-            SNR = Es * rssi_val / N0
-            rate += self.B / self.nFFT * np.log2(1 + SNR) * 1e-9  # in Gbit/s
+        SNR = Es * rssi_val / N0
+        rate = self.B*(1-self.T_sym/Tf_time)*np.log2(1 + SNR) * 1e-9  # in Gbit/s
             #print("[MIMO]val", val)
             #break
         #best_RSSI_val = rssi_los
-        rate= 1e2*rate
+        #rate= 1e2*rate
         return SNR, rate
 
 def plotbeam(ang, n):

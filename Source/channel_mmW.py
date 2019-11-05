@@ -64,14 +64,14 @@ class Channel:
         rho = 10 * self.model['alpha'] * np.log10(d) + self.model['beta'] \
               + 10 * self.model['gamma'] * np.log10(self.fc / 1e9) + self.model['sigma'] * np.random.randn(d.shape[0],
                                                                                                            d.shape[1])
-        #20 * np.log10(self.Dist) + 20 * np.log10(self.freq) - 147.55
+        #rho = 20 * np.log10(d) + 20 * np.log10(self.fc) - 147.55
         return rho
 
     def generate_paths(self):
 
         d = np.linalg.norm(self.tx - self.rx)
         self.pathloss[0] = self.ploss(d.reshape(1, 1))
-        self.coeff[0] = np.sqrt(db2pow(-self.pathloss[0])) * np.exp(1j * 2 * np.pi * np.random.rand())
+        self.coeff[0] = np.sqrt(db2pow(-self.pathloss[0]))* np.exp(1j * 2 * np.pi* np.random.rand())#* np.exp(-1j * 2 * np.pi/8)
         self.tau[0] = d/self.c
         (self.az_aoa[0], self.el_aoa[0], temp) = cart2sph(self.tx[0, 0] - self.rx[0, 0], self.tx[0, 1] -
                                                           self.rx[0, 1], self.tx[0, 2] - self.rx[0, 2])
