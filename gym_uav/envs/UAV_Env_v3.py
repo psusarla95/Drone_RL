@@ -85,7 +85,7 @@ class UAV_Env_v3(gym.Env):
 
         #Antenna Modelling
         #Uniform Linear Arrays (ULA) antenna modelling is considered
-        self.N_tx = 1 # Num of transmitter antenna elements
+        self.N_tx = 8 # Num of transmitter antenna elements
         self.N_rx = 8  # Num of receiver antenna elements
         self.count = 0
         self.ptx = 30  #dB
@@ -98,7 +98,7 @@ class UAV_Env_v3(gym.Env):
 
         #Channel
         self.sc_xyz= np.array([])
-        self.ch_model= 'fsp'
+        self.ch_model= 'uma-los'
         self.N = self.N_rx #Overall beam directions
         self.BeamSet = Generate_BeamDir(self.N) #Set of all beam directions
 
@@ -484,14 +484,16 @@ class UAV_Env_v3(gym.Env):
         exh_rates = []
 
         for rbeam in self.BeamSet:#rbeam_vec:
-            SNR, rate = mimo_exh_model.Calc_Rate(self.SF_time, np.array([rbeam, 0]))
+            SNR, rate = mimo_exh_model.Calc_ExhRate(self.SF_time, np.array([rbeam, 0]))
             #rate = 1e3 * rate
             exh_SNR.append(SNR)
             exh_rates.append(rate)
 
         best_rbeam_ndx = np.argmax(exh_rates)
+        best_beam = self.BeamSet[best_rbeam_ndx]
+        SNRmax, rate_max = mimo_exh_model.Calc_ExhRate(self.SF_time, np.array([best_beam, 0]), noise_flag=False)
         #print("[UAV_Env]: AOD: {}, AoA: {}, AoD-AoA: {}".format(mimo_exh_model.channel.az_aod[0], self.BeamSet[best_rbeam_ndx], -self.BeamSet[best_rbeam_ndx]+mimo_exh_model.channel.az_aod[0]))
-        return self.BeamSet[best_rbeam_ndx], np.max(exh_rates) #(Best RBS, Best Rate)
+        return best_beam, rate_max #(Best RBS, Best Rate)
 
     def get_Rate(self):
         return self.cur_rate
