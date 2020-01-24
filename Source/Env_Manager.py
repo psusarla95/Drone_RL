@@ -16,7 +16,7 @@ class EnvManager():
         self.env.seed(seed)
         self.done = False
 
-    def reset(self, rate_thr, measure, state_indices):
+    def reset(self, rate_thr=0.5, measure='rate_thr', state_indices=(0,0)):
         self.state = self.env.reset(rate_thr, measure, state_indices)
         return torch.tensor(self.state, device=self.device, dtype=torch.float32).unsqueeze(0)
 
@@ -39,7 +39,6 @@ class EnvManager():
 
     def check_boundaries(self):
         flag = False
-
         ue_x = self.env.state[0]
         ue_y = self.env.state[1]
         ue_xdest = self.env.ue_xdest[0]

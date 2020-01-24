@@ -41,9 +41,9 @@ class Channel:
                 elif varargin[n + 1] == 'umi-os-los':
                     self.model = {'alpha': 2.6, 'beta': 24., 'gamma': 1.6, 'sigma': 4.}
                 elif varargin[n + 1] == 'uma-los':
-                    self.model = {'alpha':2.8 , 'beta': 11.4, 'gamma': 2.3, 'sigma': 4.1} #2.8
+                    self.model = {'alpha':2.8 , 'beta': 11.4, 'gamma': 2.3, 'sigma': 0.0} #4.1 2.8
                 elif varargin[n + 1] == 'uma-nlos':
-                    self.model = {'alpha': 3.3, 'beta': 17.6, 'gamma': 2.0, 'sigma': 9.9}  # 2.8
+                    self.model = {'alpha': 3.3, 'beta': 17.6, 'gamma': 2.0, 'sigma':0.0 }  #9.9 2.8
                 elif varargin[n + 1] == 'fsp':
                     self.model = {'alpha': 2., 'beta': 32.4478, 'gamma': 2, 'sigma': 0.}#32.4478
                 elif varargin[n + 1] == 'fsp-nlos':

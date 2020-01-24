@@ -46,7 +46,7 @@ class MIMO:
         self.alpha = 0  # relative rotation between transmit and receiver arrays
 
         self.df = 60 * 1e3  # 75e3  # carrier spacing frequency
-        self.nFFT = 1200  # 2048  # no. of subspace carriers
+        self.nFFT = 512  # 2048  # no. of subspace carriers
 
         self.T_sym = 1 / self.df
         self.B = self.nFFT * self.df
@@ -55,7 +55,7 @@ class MIMO:
         self.tx = np.array([ue])
         self.rx = np.array([gnB])
         self.sc_xyz = sc_xyz
-
+        self.TX_BeamSet = Generate_BeamDir(self.N_tx)
 
 
         self.ch_model = ch_model
@@ -154,7 +154,7 @@ class MIMO:
 
         #rssi_val = np.zeros(self.npath)
         #for j in range(rssi_val.shape[0]):
-        fRF = ula.steervec(self.N_tx, self.az_aod[0], self.el_aod[0])
+
         #print("[MIMO] az_aod:{0}, el_aod:{1}, az_aoa:{2}, el_aoa:{3}".format(self.az_aod[0], self.el_aod[0], self.az_aoa[0], self.el_aoa[0]))
         #print("[MIMO] fRF:{0}".format(fRF))
         #print("[MIMO] channel: {0}".format(h.shape))
@@ -163,14 +163,21 @@ class MIMO:
         energy_val = 0
         SNR = 0
         rate = 0.0
-        rssi_val = 0.0
-        for i in range(h.shape[2]):
-            #energy_val = np.sqrt(self.N_tx*self.N_rx) * h * np.matmul(np.matmul(np.matmul(wRF.conj().T, a_rx), a_tx.conj().T),fRF)  # + np.matmul(wRF.conj().T, noise)
-            #val = np.sqrt(self.N_tx * self.N_rx) * np.matmul(np.matmul(wRF.conj().T, h[:,:,i]), fRF)  # + np.matmul(wRF.conj().T, noise)
-            #print(np.conj(wRF.T).dot(noise))
-            rssi_val += np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF)+ (np.conj(wRF.T).dot(noise))[0])**2#
-            #energy_val += val
-        SNR = Es * rssi_val / N0
+        npaths = 1+self.channel.nlos_path
+        rssi_vec = np.zeros((self.N_tx, 1))
+        for k in range(self.N_tx): #Over all TX beams
+            fRF = ula.steervec(self.N_tx, self.TX_BeamSet[k], 0)
+            rssi_val = 0.0
+            for j in range(0,npaths):
+                for i in range(h.shape[2]): #over all carriers
+                    #energy_val = np.sqrt(self.N_tx*self.N_rx) * h * np.matmul(np.matmul(np.matmul(wRF.conj().T, a_rx), a_tx.conj().T),fRF)  # + np.matmul(wRF.conj().T, noise)
+                    #val = np.sqrt(self.N_tx * self.N_rx) * np.matmul(np.matmul(wRF.conj().T, h[:,:,i]), fRF)  # + np.matmul(wRF.conj().T, noise)
+                    #print(np.conj(wRF.T).dot(noise))
+                    rssi_val += np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF))**2#+ (np.conj(wRF.T).dot(noise))[0])**2#
+                    #energy_val += val
+            rssi_vec[k] = rssi_val
+        #print("RSSI vec: ", rssi_vec)
+        SNR = Es * np.max(rssi_vec) / N0
         rate = self.B*np.log2(1 + SNR) * 1e-9  # in Gbit/s
 
         #rssi_val = np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h)).dot(fRF))**2# + (np.conj(wRF.T).dot(noise))[0]) ** 2
@@ -189,7 +196,7 @@ class MIMO:
         #rate = 1e2*rate
         return SNR, rate
 
-    def Calc_ExhRate(self, Tf, RB_ang, noise_flag=True):  # best_RSSI_val):
+    def Calc_ExhRate(self, Tf, RB_ang, noise_flag=False):  # best_RSSI_val):
         self.steps = 0
         Tf = Tf * 1e-3  # for msec
         ktf = np.ceil(Tf / self.T_sym)
@@ -198,10 +205,6 @@ class MIMO:
         # calc_SNR
         Es = self.Transmit_Energy()
         h = self.channel.get_h()#self.Channel()
-
-
-        #print("[MIMO] h: ", h.shape)
-
         # Noise for freq domain
         N0 = self.Noise()
         gau = np.zeros((self.N_rx,1), dtype=np.complex)
@@ -213,32 +216,29 @@ class MIMO:
         wRF = ula.steervec(self.N_rx, RB_ang[0], RB_ang[1]) #RB_ang-> (az_RB, el_RB)
         #print("[MIMO] wRF:{0}".format(wRF))
         #print("[MIMO] RB_ang[0]: {0}, RB_ang[1]: {1}".format(RB_ang[0], RB_ang[1]))
+
         # transmit beamforming vector
+        npaths = self.channel.nlos_path + 1
+        rssi_vec = np.zeros((self.N_tx,1))
+        for k in range(self.N_tx):
+            fRF = ula.steervec(self.N_tx, self.TX_BeamSet[k], 0)
+            rssi_val = 0.0
+            for j in range(0,npaths):
+                for i in range(h.shape[2]):#no. of carriers
+                    #energy_val = np.sqrt(self.N_tx*self.N_rx) * h * np.matmul(np.matmul(np.matmul(wRF.conj().T, a_rx), a_tx.conj().T),fRF)  # + np.matmul(wRF.conj().T, noise)
+                    #val = np.sqrt(self.N_tx * self.N_rx) * np.matmul(np.matmul(wRF.conj().T, h[:,:,i]), fRF)  # + np.matmul(wRF.conj().T, noise)
+                    #print(np.conj(wRF.T).dot(noise))
+                    if(noise_flag):
+                        rssi_val += np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF)+ (np.conj(wRF.T).dot(noise))[0])**2#
+                    else:
+                        rssi_val += np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF))**2
+                #energy_val += val
+            rssi_vec[k] = rssi_val
+        #print("Exh rssi_vec: ", rssi_vec)
 
-        #rssi_val = np.zeros(self.npath)
-        #for j in range(rssi_val.shape[0]):
-        fRF = ula.steervec(self.N_tx, self.az_aod[0], self.el_aod[0])
-        #print("[MIMO] az_aod:{0}, el_aod:{1}, az_aoa:{2}, el_aoa:{3}".format(self.az_aod[0], self.el_aod[0], self.az_aoa[0], self.el_aoa[0]))
-        #print("[MIMO] fRF:{0}".format(fRF))
-        #print("[MIMO] channel: {0}".format(h.shape))
-
-        #rssi_val = np.zeros(h.shape[2])
-        energy_val = 0
-        SNR = 0
-        rate = 0.0
-        rssi_val = 0.0
-        for i in range(h.shape[2]):
-            #energy_val = np.sqrt(self.N_tx*self.N_rx) * h * np.matmul(np.matmul(np.matmul(wRF.conj().T, a_rx), a_tx.conj().T),fRF)  # + np.matmul(wRF.conj().T, noise)
-            #val = np.sqrt(self.N_tx * self.N_rx) * np.matmul(np.matmul(wRF.conj().T, h[:,:,i]), fRF)  # + np.matmul(wRF.conj().T, noise)
-            #print(np.conj(wRF.T).dot(noise))
-            if(noise_flag):
-                rssi_val += np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF)+ (np.conj(wRF.T).dot(noise))[0])**2#
-            else:
-                rssi_val += np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h[:, :, i])).dot(fRF))**2
-            #energy_val += val
-        SNR = Es * rssi_val / N0
-        rate = self.B* (1-self.T_sym/Tf_time)*np.log2(1 + SNR) * 1e-9  # in Gbit/s
-
+        SNR = Es * np.max(rssi_vec) / N0
+        #rate = self.B* (1-self.T_sym/Tf_time)*np.log2(1 + SNR) * 1e-9  # in Gbit/s
+        rate = self.B * np.log2(1 + SNR) * 1e-9  # in Gbit/s
         #rssi_val = np.abs(np.sqrt(self.N_rx * self.N_tx) * np.array(np.conj(wRF.T).dot(h)).dot(fRF))**2# + (np.conj(wRF.T).dot(noise))[0]) ** 2
         #SNR = Es * rssi_val / N0
         #rate = self.B*(1-self.T_sym/Tf_time) * np.log2(1 + SNR) * 1e-9  # in Gbit/s
@@ -321,6 +321,21 @@ def plotbeam(ang, n):
     #ax.plot(theta, gr)
     #plt.show()
     return theta, gr
+
+def Generate_BeamDir(N):
+    #if np.min(self.ue_xloc) < 0 and np.max(self.ue_xloc) > 0:
+    min_ang = 0#-math.pi/2
+    max_ang = np.pi#math.pi/2
+    step_size = (max_ang-min_ang)/N
+    beam_angles = np.arange(min_ang+step_size, max_ang+step_size, step_size)
+
+    BeamSet = []#np.zeros(N)#np.fft.fft(np.eye(N))
+
+    #B_i = (i)pi/(N-1), forall 0 <= i <= N-1; 0< beta < pi/(N-1)
+    val = min_ang
+    for i in range(N):
+        BeamSet.append(np.arctan2(np.sin(beam_angles[i]), np.cos(beam_angles[i])))#(i+1)*(max_ang-min_ang)/(N)
+    return np.array(BeamSet) #eval(strBeamSet_list)#np.ndarray.tolist(BeamSet)
 
 '''
 y = array_factor(ang, N)

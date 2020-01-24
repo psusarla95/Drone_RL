@@ -87,8 +87,10 @@ def plot(values, moving_avg_period):
 
     moving_avg = get_moving_average(moving_avg_period, values)
     plt.plot(moving_avg)
+
     plt.pause(0.001)
     print("Episode", len(values), "\t", moving_avg_period, "episode moving avg:", moving_avg[-1], end="\r")
+    #plt.savefig('dronerl_training.pdf')
     #if is_ipython: display.clear_output(wait=True)
 
 
