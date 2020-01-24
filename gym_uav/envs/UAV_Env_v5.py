@@ -15,6 +15,7 @@ from mpl_toolkits.mplot3d import Axes3D
     MAIN CLASS ENVIRONMENT
 ####################################
 UAV_Env - UAV Environment
+This version of the UAV enivronment is for NLOS channelling conditions
 
 Ground Base Station (gNB) Characteristics:
 - Considers a MIMO model with mmwave frequency
@@ -47,7 +48,7 @@ Channel characteristics:
 '''
 
 
-class UAV_Env_v3(gym.Env):
+class UAV_Env_v5(gym.Env):
     """
     Description:
     A UAV moves in a region within the coverage area of the base station.
@@ -97,8 +98,8 @@ class UAV_Env_v3(gym.Env):
         self.gNB = np.array([[0,0,0]])#, [20,30,0], [40,60,0]]
 
         #Channel
-        self.sc_xyz= np.array([])
-        self.ch_model= 'uma-los'
+        self.sc_xyz= np.array([[0,150,0],[250,50,0],[-200,-150,0]])
+        self.ch_model= 'uma-nlos'
         self.N = self.N_rx #Overall beam directions
         self.BeamSet = Generate_BeamDir(self.N) #Set of all beam directions
 
@@ -116,7 +117,7 @@ class UAV_Env_v3(gym.Env):
         self.ue_vx = np.array([50,100]) #3 speed parameters
         self.ue_vy = np.array([50,100]) #3 speed parameters
         self.ue_xdest = np.array([np.min(self.ue_xloc)]) # 1 x-dest loc np.min(self.ue_xloc)
-        self.ue_ydest = np.array([400]) # 1 y-dest loc
+        self.ue_ydest = np.array([np.min(self.ue_yloc)]) # 1 y-dest loc
         self.ue_xsrc = np.array([np.max(self.ue_xloc)]) # 1 source x-loc
         self.ue_ysrc = np.array([np.max(self.ue_yloc)]) # 1 source y-loc
         self.ue_moves = np.array(['L', 'R', 'U', 'D'])  # moving direction of UAV
@@ -227,8 +228,8 @@ class UAV_Env_v3(gym.Env):
 
         self.ue_path = []
         #self.ue_path.append(self.state)
-        self.ue_xsrc = self.state[0]
-        self.ue_ysrc = self.state[1]
+        self.ue_xsrc = np.array([self.state[0]])
+        self.ue_ysrc = np.array([self.state[1]])
         self.ue_path_rates = []
         self.measure = meas
         self.rwd = 0.0
@@ -322,6 +323,19 @@ class UAV_Env_v3(gym.Env):
         return reached
 
     def _gameover(self):
+
+        #print(self.cur_dist, self.ue_xdest[0], self.ue_ydest[0])
+        #print(np.sqrt((self.ue_xsrc[0] - self.ue_xdest[0]) ** 2 + (self.ue_ysrc[0] - self.ue_ydest[0]) ** 2))
+        norm_dist = (self.cur_dist+0.01)/(np.sqrt((self.ue_xsrc[0] - self.ue_xdest[0]) ** 2 + (self.ue_ysrc[0] - self.ue_ydest[0]) ** 2)+0.01)
+        data_rate = self.cur_rate
+        rwd = np.log10((data_rate+1e-4)/norm_dist)
+        #print(rwd, norm_dist, self.cur_dist, data_rate)
+        done = False
+        if(self.dest_check()):
+            done = True
+        return rwd, done
+    '''
+    def _gameover(self):
         #state = np.rint(self.state * self.high_obs)
         #curr_dist = np.sqrt((state[0] - self.ue_xdest[0]) ** 2 + (state[1] - self.ue_ydest[0]) ** 2)
 
@@ -361,7 +375,7 @@ class UAV_Env_v3(gym.Env):
         #    done = True
         #rwd = np.log10(8*self.rate + 1) + np.exp(-self.cur_dist/1000)*np.exp(-2*(self.steps_done-1)/50)
         return rwd, done
-
+    '''
 
     #Reward Function for max rate path
     def rate_path_gameover(self):
